@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+sqlalchemy
+psycopg2-binary  # For NeonDB (Postgres)
+pypdf            # For Resume Parsing
+python-multipart # For file uploads
+deepgram-sdk
+groq
+httpx            # Async HTTP client
