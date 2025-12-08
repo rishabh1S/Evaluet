@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db                
 from app.models.interview import InterviewSession 
 from app.services.pdf_service import extract_text_from_pdf
-from app.services.prompt_service import build_system_prompt
+from app.prompts.interviewer import build_system_prompt
 
 router = APIRouter()
 
@@ -45,7 +45,6 @@ async def init_interview(
         job_role=job_role,
         job_description=job_desc,
         candidate_level=job_level,
-        resume_text=resume_text,
         system_prompt=system_prompt
     )
     
