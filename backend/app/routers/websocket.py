@@ -49,14 +49,37 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
     state_manager = InterviewStateManager(duration_minutes=15) # 15-minute interviews
     history = [{"role": "system", "content": session_data.system_prompt}]
 
+    initial_greeting = f"Hello! I see you're applying for the {session_data.job_role} position. Could you introduce yourself?"
+
+    # 1. Send Text to UI
+    await websocket.send_text(json.dumps({
+        "type": "transcript", "role": "assistant", "content": initial_greeting
+    }))
+
+    # 2. Send Audio
+    # We fake a stream for the initial greeting
+    async def fake_stream():
+        yield initial_greeting
+
+    dg_service.assistant_speaking = True
+    async for audio_chunk, text_segment in dg_service.text_to_speech_stream(fake_stream()):
+        await websocket.send_bytes(audio_chunk)
+    dg_service.assistant_speaking = False
+
+    history.append({"role": "assistant", "content": initial_greeting})
+
     # 4. Define Parallel Loops
-    
     async def receive_audio_loop():
         """Reads audio from Client -> Sends to Deepgram"""
         try:
             while True:
                 data = await websocket.receive_bytes()
-                await dg_service.send_audio(data)
+                if dg_service.assistant_speaking:
+                    continue
+                try:
+                    await dg_service.send_audio(data)
+                except Exception as e:
+                    print(f"Deepgram Send Audio Error: {e}")
         except WebSocketDisconnect:
             pass 
         except Exception as e:
@@ -76,16 +99,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
                     if state_manager.check_time():
                         # TIME IS UP! Inject system instruction.
                         print("Time limit reached. Injecting wrap-up prompt.")
-                        history.append({"role": "system", "content": "SYSTEM ALERT: The interview time limit (15 mins) has passed. Politely thank the candidate, stop asking questions, and end the interview now using the [END_INTERVIEW] tag."})
-                        
-                        # Trigger an immediate AI response to say goodbye (without waiting for user)
-                        # We push a dummy signal to trigger generation
-                        user_text = "(Time limit reached)" 
+                        user_text = "(Time limit reached)"
+                        # Inject System Prompt override
+                        history.append({"role": "system", "content": "SYSTEM: Time is up. End the interview now."})
                     else:
                         continue
 
                 # If we got actual text (or the time trigger)
                 if user_text != "(Time limit reached)":
+                    if len(user_text.split()) < 2:
+                        print(f"Ignored fragment: {user_text}")
+                        continue
+
                     await websocket.send_text(json.dumps({
                         "type": "transcript", 
                         "role": "user", 
@@ -99,10 +124,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
                 # C. Get AI Response (Stream)
                 ai_text_stream = get_ai_response_stream(history)
-                
                 full_ai_response = ""
                 
                 # D. Stream Audio & Accumulate Text
+                dg_service.assistant_speaking = True
                 async for audio_chunk, text_segment in dg_service.text_to_speech_stream(ai_text_stream):
                     
                     # Filter out the [END_INTERVIEW] tag from being spoken (Optional polish)
@@ -112,6 +137,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
                         await websocket.send_bytes(audio_chunk)
                     
                     full_ai_response += text_segment
+
+                dg_service.assistant_speaking = False
 
                 # E. Save history
                 if full_ai_response.strip():
@@ -129,8 +156,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
                     state_manager.is_ended = True
                     # Send a control message to frontend to close gracefully
                     await websocket.send_text(json.dumps({"type": "control", "action": "end_interview"}))
-                    # Give frontend 2 seconds to receive audio before closing
-                    await asyncio.sleep(2) 
+                    # Give frontend 3 seconds to receive audio before closing
+                    await asyncio.sleep(3) 
                     await websocket.close()
                     break
 
@@ -152,8 +179,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
         # 1. Save Transcript to DB
         # We need to use a fresh DB session because the dependency 'db' might be closed or unstable in finally block
         try:
-            # Update session with transcript and status
-            session_data.transcript = history # SQLAlchemy handles List -> JSON conversion
+            # FILTER HISTORY: Remove the huge System Prompt before saving to DB
+            # This helps prevent DB bloat and report generation errors
+            chat_only = [msg for msg in history if msg["role"] != "system"]
+            session_data.transcript = chat_only
             session_data.status = "PENDING_REPORT"
             db.commit()
             print("Transcript saved.")
