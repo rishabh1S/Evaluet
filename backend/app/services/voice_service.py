@@ -38,9 +38,7 @@ class DeepgramService:
             self._listen_cm = self.client.listen.v2.connect(
                 model="flux-general-en",
                 encoding="linear16",      # ONLY format allowed
-                sample_rate="16000",      # MUST be string
-                eot_timeout_ms="2000",    # Optional but helpful
-                eot_threshold="0.6"       # VAD behavior
+                sample_rate="16000"     # MUST be string
             )
 
             # Manually enter the async context manager

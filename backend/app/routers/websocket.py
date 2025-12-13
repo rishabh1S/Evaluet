@@ -9,7 +9,6 @@ from app.models.interview import InterviewSession
 from app.services.voice_service import DeepgramService   # <-- new one
 from app.services.ai_service import get_ai_response_stream
 from app.services.report_service import generate_and_send_report
-from app.util.opus_to_pcm import convert_webm_opus_to_pcm
 
 router = APIRouter()
 
@@ -80,33 +79,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
     # ----------------------
     # AUDIO LOOP (CLIENT → FLUX)
     # ----------------------
-    # async def audio_loop():
-    #     while True:
-    #         try:
-    #             opus_chunk = await websocket.receive_bytes()
-    #             # audio must be 16kHz mono linear16 PCM
-    #             if not dg.assistant_speaking:
-    #                 pcm_chunk = await convert_webm_opus_to_pcm(opus_chunk)
-    #                 if pcm_chunk:
-    #                     await dg.send_audio(pcm_chunk)
-    #         except WebSocketDisconnect:
-    #             break
-
     async def audio_loop():
         while True:
             try:
-                opus_chunk = await websocket.receive_bytes()
-                print("📥 Browser chunk:", len(opus_chunk))
-
+                pcm = await websocket.receive_bytes()
                 if not dg.assistant_speaking:
-                    pcm_chunk = await convert_webm_opus_to_pcm(opus_chunk)
-                    print("🎧 PCM:", len(pcm_chunk))
-
-                    if pcm_chunk:
-                        await dg.send_audio(pcm_chunk)
-                        print("📤 Sent to DG")
-                        await asyncio.sleep(0.02)
-
+                    await dg.send_audio(pcm)
             except WebSocketDisconnect:
                 break
             except Exception as e:
