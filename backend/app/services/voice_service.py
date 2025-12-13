@@ -66,9 +66,6 @@ class DeepgramService:
         await self.stop_silence_loop()
 
         try:
-            if self.connection:
-                await self.connection.close()
-
             if self._listen_cm:
                 # Exit the context manager we manually entered
                 await self._listen_cm.__aexit__(None, None, None)

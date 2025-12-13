@@ -10,6 +10,9 @@ import { SplashScreen, Stack } from 'expo-router'
 import { Provider } from 'components/Provider'
 import { useTheme } from 'tamagui'
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Buffer } from "buffer"
+
+global.Buffer = Buffer
 
 // Catch any errors thrown by the Layout component.
 export { ErrorBoundary } from 'expo-router'

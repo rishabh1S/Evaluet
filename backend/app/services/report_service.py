@@ -63,7 +63,7 @@ async def generate_and_send_report(session_id: str):
 
         # 4. Call LLM to generate report
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", # More powerful model for report generation
+            model="meta-llama/llama-prompt-guard-2-86m", # Use appropriate model
             messages=[{"role": "user", "content": report_prompt}],
             temperature=0.5
         )

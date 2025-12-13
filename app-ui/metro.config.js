@@ -12,6 +12,10 @@ const config = getDefaultConfig(__dirname, {
 
 config.resolver.sourceExts.push('mjs')
 
+config.resolver.extraNodeModules = {
+  buffer: require.resolve("buffer"),
+}
+
 module.exports = withTamagui(config, {
   components: ['tamagui'],
   config: './tamagui.config.ts',

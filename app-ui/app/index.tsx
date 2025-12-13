@@ -23,10 +23,10 @@ import {
 import { JobLevelPicker } from "components/JobLevelPicker";
 
 export default function IndexScreen() {
-  const [userId, setUserId] = useState("");
-  const [jobRole, setJobRole] = useState("");
+  const [userId, setUserId] = useState("rishabh1s");
+  const [jobRole, setJobRole] = useState("Software Engineer");
   const [jobLevel, setJobLevel] = useState("mid-level");
-  const [jobDesc, setJobDesc] = useState("");
+  const [jobDesc, setJobDesc] = useState("Must know Java, Springboot, Microservices.");
   const [resume, setResume] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -60,8 +60,11 @@ export default function IndexScreen() {
         method: "POST",
         body: form,
       });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
       const data = await res.json();
-
       router.navigate(`/interview/${data.session_id}` as any);
     } catch (err: any) {
       console.error('Init interview failed:', err)
@@ -111,6 +114,9 @@ export default function IndexScreen() {
             <Input
               textContentType="emailAddress"
               placeholder="Enter your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={userId}
               onChangeText={setUserId}
