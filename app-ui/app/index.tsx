@@ -55,13 +55,20 @@ export default function IndexScreen() {
     form.append("job_desc", jobDesc);
     form.append("user_id", userId);
 
-    const res = await fetch(`${API_BASE}/api/interview/init`, {
-      method: "POST",
-      body: form,
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch(`${API_BASE}/api/interview/init`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
 
-    router.navigate(`/interview/${data.session_id}` as any);
+      router.navigate(`/interview/${data.session_id}` as any);
+    } catch (err: any) {
+      console.error('Init interview failed:', err)
+      alert(err.message ?? 'Network error')
+    } finally {
+      setLoading(false)
+    }
   };
 
   return (
@@ -102,6 +109,7 @@ export default function IndexScreen() {
               </Text>
             </XStack>
             <Input
+              textContentType="emailAddress"
               placeholder="Enter your email"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={userId}
@@ -130,6 +138,7 @@ export default function IndexScreen() {
               </Text>
             </XStack>
             <Input
+              textContentType="jobTitle"
               placeholder="e.g. Senior Software Engineer"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={jobRole}
@@ -207,7 +216,7 @@ export default function IndexScreen() {
                 fontSize={15}
                 fontWeight="600"
               >
-                {resume ? "Resume Selected ✓" : "Upload Resume"}
+                {resume ? "Resume Selected" : "Upload Resume"}
               </Text>
             </XStack>
           </Button>
