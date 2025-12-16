@@ -69820,7 +69820,7 @@
     "selectionStyles": "Function",
     "settings": {
       "defaultFont": "body",
-      "onlyAllowShorthands": true,
+      "onlyAllowShorthands": false,
       "mediaQueryDefaultActive": {
         "2xl": false,
         "xl": false,

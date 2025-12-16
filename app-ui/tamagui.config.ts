@@ -1,7 +1,13 @@
 import { defaultConfig } from '@tamagui/config/v4'
 import { createTamagui } from 'tamagui'
 
-export const config = createTamagui(defaultConfig)
+export const config = createTamagui({
+  ...defaultConfig,
+  settings: {
+    ...defaultConfig.settings,
+    onlyAllowShorthands:false
+  },
+})
 
 export default config
 

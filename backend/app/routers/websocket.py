@@ -28,7 +28,7 @@ async def websocket_endpoint(
         return
 
     history = [{"role": "system", "content": session_data.system_prompt}]
-    connection_state = {"connected": True}
+    shutdown_event = asyncio.Event()
 
     greeting = (
         f"Hello! You're applying for {session_data.job_role} role. "
@@ -37,13 +37,14 @@ async def websocket_endpoint(
     await send_greeting(websocket, dg, greeting, history)
 
     audio_task = asyncio.create_task(
-        audio_loop(websocket, dg, connection_state)
+        audio_loop(websocket, dg, shutdown_event)
     )
     convo_task = asyncio.create_task(
-        conversation_loop(websocket, dg, history, connection_state)
+        conversation_loop(websocket, dg, history, shutdown_event)
     )
+    await shutdown_event.wait()
 
-    await audio_task
+    audio_task.cancel()
     convo_task.cancel()
 
     await dg.stop()
@@ -57,9 +58,8 @@ async def websocket_endpoint(
     finally:
         db.close()
 
-    if connection_state["connected"]:
-        try:
-            await websocket.close()
-        except RuntimeError:
-            pass
+    try:
+        await websocket.close()
+    except RuntimeError:
+        pass
 

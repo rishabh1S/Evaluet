@@ -63,7 +63,7 @@ async def generate_and_send_report(session_id: str):
 
         # 4. Call LLM to generate report
         completion = client.chat.completions.create(
-            model="meta-llama/llama-prompt-guard-2-86m", # Use appropriate model
+            model="llama-3.3-70b-versatile", 
             messages=[{"role": "user", "content": report_prompt}],
             temperature=0.5
         )
@@ -73,9 +73,13 @@ async def generate_and_send_report(session_id: str):
         # For now, we save the text report.
         
         # C. Save to DB
-        session.feedback_report = report_content
-        session.status = "COMPLETED"
-        db.commit()
+        try:
+            session.feedback_report = report_content
+            session.status = "COMPLETED"
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         
         # D. Send Email
         # Assuming 'user_id' is an email for MVP. If it's an ID, you need a User table to lookup email.

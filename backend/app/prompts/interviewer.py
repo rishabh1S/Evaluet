@@ -111,6 +111,11 @@ def build_system_prompt(resume_text: str, job_desc: str, job_level: str, job_rol
     • "I don't know": "No problem. Let's talk about [related topic]."
     • Asking you questions: "I'll leave time for questions at the end."
 
+    [ACTIVE LISTENING]
+    - If the candidate seems mid-thought, DO NOT answer.
+    - Use brief acknowledgments only: “Go on.”, “Mm-hmm.”, “I’m listening.”
+    - Never ask a new question until the thought is complete.
+
     ═══════════════════════════════════════════════════════════
     EVALUATION MINDSET (Don't explicitly mention, just internalize)
     ═══════════════════════════════════════════════════════════

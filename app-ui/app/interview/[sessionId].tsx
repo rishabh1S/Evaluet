@@ -1,93 +1,19 @@
-import { useLocalSearchParams, Stack } from "expo-router";
-import { YStack, XStack, Button, Text, ScrollView, Card } from "tamagui";
+import { useLocalSearchParams } from "expo-router";
+import { YStack, Button, Text, ScrollView, Circle } from "tamagui";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../lib/env";
 import * as Crypto from "expo-crypto";
-import {
-  Mic,
-  Square,
-  Clock,
-  MessageCircle,
-  User,
-  Bot,
-} from "@tamagui/lucide-icons";
+import { Mic, MessageCircle } from "@tamagui/lucide-icons";
 import { Audio } from "expo-av";
 import {
   AudioRecorderProvider,
   useSharedAudioRecorder,
 } from "@siteed/expo-audio-studio";
-
-interface Message {
-  id: string;
-  text: string;
-  role?: "user" | "assistant";
-}
-
-/* ---------------- Header ---------------- */
-
-function InterviewHeader({ timeLabel }: { timeLabel: string }) {
-  return (
-    <LinearGradient
-      colors={["rgba(15,23,42,0.95)", "rgba(30,41,59,0.9)"]}
-      style={{ paddingTop: 50, paddingBottom: 16, paddingHorizontal: 20 }}
-    >
-      <XStack justify="space-between" items="center">
-        <XStack gap="$3" items="center">
-          <YStack bg="rgba(99,102,241,0.2)" p="$2">
-            <MessageCircle size={20} color="#818cf8" />
-          </YStack>
-          <Text color="white" fontSize={18} fontWeight="700">
-            Live Interview
-          </Text>
-        </XStack>
-
-        <XStack gap="$2" items="center" bg="rgba(0,0,0,0.3)" px="$3" py="$2">
-          <Clock size={16} color="#60a5fa" />
-          <Text color="#60a5fa" fontSize={15} fontWeight="600">
-            {timeLabel}
-          </Text>
-        </XStack>
-      </XStack>
-    </LinearGradient>
-  );
-}
-
-/* ---------------- Message Bubble ---------------- */
-
-function MessageBubble({ message }: { message: Message }) {
-  const isUser = message.role === "user";
-
-  return (
-    <XStack justify={isUser ? "flex-end" : "flex-start"} mb="$3">
-      <XStack maxW="85%" gap="$2" flexDirection={isUser ? "row-reverse" : "row"}>
-        <YStack
-          bg={isUser ? "rgba(99,102,241,0.2)" : "rgba(34,197,94,0.2)"}
-          p="$2"
-          width={36}
-          height={36}
-          items="center"
-          justify="center"
-        >
-          {isUser ? (
-            <User size={18} color="#818cf8" />
-          ) : (
-            <Bot size={18} color="#22c55e" />
-          )}
-        </YStack>
-
-        <Card
-          bg={isUser ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.08)"}
-          bordered
-          p="$3"
-        >
-          <Text color="white">{message.text}</Text>
-        </Card>
-      </XStack>
-    </XStack>
-  );
-}
+import MessageBubble, { Message } from "components/MessageBubble";
+import InterviewHeader from "components/InterviewHeader";
 
 /* ---------------- Screen Wrapper ---------------- */
 
@@ -102,7 +28,7 @@ export default function InterviewScreenWrapper() {
 /* ---------------- Main Screen ---------------- */
 
 function InterviewScreen() {
-  let currentSound: Audio.Sound | null = null;
+  const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -144,57 +70,70 @@ function InterviewScreen() {
             },
           ]);
         }
-      }else {
-        await playPcmWav(e.data); // Play received audio
+      } else {
+        await playPcmWav(e.data);
       }
     };
 
     ws.current.onerror = () => setStatus("Connection error");
     ws.current.onclose = () => setStatus("Disconnected");
 
-    return () => ws.current?.close();
+    return () => {
+      ws.current?.close();
+    };
   }, [sessionId]);
 
-  /* ---- Controls ---- */
-  async function handleStart() {
-    await startRecording({
-      sampleRate: 16000,
-      channels: 1,
-      encoding: "pcm_16bit",
-      interval: 100, // Send chunks every 100ms
-      onAudioStream: async (event) => {
-        // Send raw PCM data to WebSocket
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          // event.data is a base64 string by default
-          // Convert to Uint8Array for WebSocket
-          const base64Data = event.data as string;
-          const binaryString = atob(base64Data);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          ws.current.send(bytes);
-        }
-      },
-    });
-    setIsRecording(true);
-    setStatus("🎤 Listening…");
-  }
+  /* ---- Cleanup audio on unmount ---- */
+  useEffect(() => {
+    return () => {
+      if (currentSound.current) {
+        currentSound.current.unloadAsync();
+      }
+    };
+  }, []);
 
-  async function handleStop() {
-    await stopRecording();
-    setIsRecording(false);
-    setStatus("Processing…");
+  /* ---- Toggle Recording ---- */
+  async function toggleRecording() {
+    if (isRecording) {
+      await stopRecording();
+      setIsRecording(false);
+      setStatus("Processing…");
+    } else {
+      await startRecording({
+        sampleRate: 16000,
+        channels: 1,
+        encoding: "pcm_16bit",
+        interval: 100,
+        onAudioStream: async (event) => {
+          if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+            const base64Data = event.data as string;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            ws.current.send(bytes);
+          }
+        },
+      });
+      setIsRecording(true);
+      setStatus("🎤 Listening…");
+    }
   }
 
   async function playPcmWav(buffer: ArrayBuffer) {
     try {
-      if (currentSound) {
-        await currentSound.unloadAsync();
-        currentSound = null;
+      if (currentSound.current) {
+        await currentSound.current.unloadAsync();
+        currentSound.current = null;
       }
 
-      const base64 = Buffer.from(buffer).toString("base64");
+      const uint8Array = new Uint8Array(buffer);
+      let binaryString = '';
+      for (const element of uint8Array) {
+        binaryString += String.fromCharCode(element);
+      }
+      const base64 = btoa(binaryString);
 
       const sound = new Audio.Sound();
       await sound.loadAsync({
@@ -202,7 +141,7 @@ function InterviewScreen() {
       });
 
       await sound.playAsync();
-      currentSound = sound;
+      currentSound.current = sound;
     } catch (e) {
       console.error("Audio playback error:", e);
     }
@@ -210,114 +149,81 @@ function InterviewScreen() {
 
   return (
     <LinearGradient colors={["#0f172a", "#1e293b"]} style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          header: () => <InterviewHeader timeLabel={timeLabel} />,
-        }}
-      />
-
-      <YStack flex={1} p="$4" gap="$4">
-        {/* Status Banner */}
-        <Card
-          bg="rgba(0,0,0,0.3)"
-          bordered
-          borderColor="rgba(255,255,255,0.1)"
-          p="$3"
-        >
-          <Text color="rgba(255,255,255,0.7)" fontSize={14}>
-            {status}
-          </Text>
-        </Card>
-
-        {/* Messages ScrollView */}
-        <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-          <YStack py="$2">
-            {messages.length === 0 ? (
-              <YStack items="center" justify="center" pt="$8" gap="$3">
-                <YStack bg="rgba(99,102,241,0.1)" p="$5">
-                  <MessageCircle size={48} color="#818cf8" />
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <InterviewHeader timeLabel={timeLabel} status={status} />
+      
+        <YStack flex={1} p="$4" gap="$4">
+          {/* Messages ScrollView */}
+          <ScrollView flex={1} showsVerticalScrollIndicator={false}>
+            <YStack py="$2">
+              {messages.length === 0 ? (
+                <YStack items="center" justify="center" pt="$10" gap="$4">
+                  <Circle size={100} bg="rgba(99,102,241,0.1)">
+                    <MessageCircle size={48} color="#818cf8" />
+                  </Circle>
+                  <YStack gap="$2" items="center">
+                    <Text 
+                      color="rgba(255,255,255,0.9)" 
+                      fontSize={18} 
+                      fontWeight="600"
+                      textAlign="center"
+                    >
+                      Ready to start
+                    </Text>
+                    <Text 
+                      color="rgba(255,255,255,0.5)" 
+                      fontSize={15}
+                      textAlign="center"
+                    >
+                      Tap the microphone to begin speaking
+                    </Text>
+                  </YStack>
                 </YStack>
-                <Text color="rgba(255,255,255,0.6)" fontSize={16} text="center">
-                  Your conversation will appear here
-                </Text>
-              </YStack>
-            ) : (
-              messages.map((m) => <MessageBubble key={m.id} message={m} />)
-            )}
+              ) : (
+                messages.map((m) => <MessageBubble key={m.id} message={m} />)
+              )}
+            </YStack>
+          </ScrollView>
+
+          {/* Single Mic Button */}
+          <YStack items="center" pb="$2" pt="$-1">
+            <Button
+              onPress={toggleRecording}
+              circular
+              size="$8"
+              bg={isRecording ? "rgba(241,102,99,0.2)" : "rgba(99,102,241,0.2)"}
+              borderColor={isRecording ? "#ef4444" : "#818cf8"}
+              borderWidth={3}
+              pressStyle={{
+                scale: 0.92
+              }}
+              animation="bouncy"
+              style={{
+                width: 80,
+                height: 80,
+                shadowColor: isRecording ? "#472828ff" : "#818cf8",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isRecording ? 0.5 : 0.3,
+                shadowRadius: isRecording ? 20 : 12,
+              }}
+            >
+              <Mic 
+                size={32} 
+                color={isRecording ? "#ef4444" : "#818cf8"}
+              />
+            </Button>
+            
+            <Text 
+              color={isRecording ? "rgba(255, 50, 50, 0.7)" : "rgba(255,255,255,0.7)"} 
+              fontSize={14} 
+              fontWeight="600"
+              mt="$3"
+            >
+              {isRecording ? "Tap to stop" : "Tap to speak"}
+            </Text>
           </YStack>
-        </ScrollView>
-
-        {/* Control Buttons */}
-        <Card
-          bg="rgba(0,0,0,0.4)"
-          bordered
-          borderColor="rgba(255,255,255,0.1)"
-          p="$4"
-          elevate
-        >
-          <XStack gap="$3" justify="center">
-            <Button
-              onPress={handleStart} 
-              disabled={isRecording}
-              bg={
-                isRecording ? "rgba(255,255,255,0.1)" : "rgba(99,102,241,0.2)"
-              }
-              borderColor={isRecording ? "rgba(255,255,255,0.2)" : "#818cf8"}
-              borderWidth={2}
-              flex={1}
-              height={60}
-              pressStyle={{
-                scale: 0.95,
-                bg: "rgba(99,102,241,0.3)",
-              }}
-              opacity={isRecording ? 0.5 : 1}
-            >
-              <XStack gap="$2" items="center">
-                <Mic
-                  size={24}
-                  color={isRecording ? "rgba(255,255,255,0.4)" : "#818cf8"}
-                />
-                <Text
-                  color={isRecording ? "rgba(255,255,255,0.4)" : "white"}
-                  fontSize={16}
-                  fontWeight="700"
-                >
-                  Speak
-                </Text>
-              </XStack>
-            </Button>
-
-            <Button
-              onPress={handleStop} 
-              disabled={!isRecording}
-              bg={isRecording ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.1)"}
-              borderColor={isRecording ? "#ef4444" : "rgba(255,255,255,0.2)"}
-              borderWidth={2}
-              flex={1}
-              height={60}
-              pressStyle={{
-                scale: 0.95,
-                bg: "rgba(239,68,68,0.3)",
-              }}
-              opacity={isRecording ? 1 : 0.5}
-            >
-              <XStack gap="$2" items="center">
-                <Square
-                  size={24}
-                  color={isRecording ? "#ef4444" : "rgba(255,255,255,0.4)"}
-                />
-                <Text
-                  color={isRecording ? "white" : "rgba(255,255,255,0.4)"}
-                  fontSize={16}
-                  fontWeight="700"
-                >
-                  Stop
-                </Text>
-              </XStack>
-            </Button>
-          </XStack>
-        </Card>
-      </YStack>
+        </YStack>
+      </SafeAreaView>
     </LinearGradient>
   );
 }

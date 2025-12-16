@@ -6,31 +6,39 @@ from app.services.ai_service import get_ai_response_stream
 from app.domain.interview_state import InterviewStateManager
 
 
-async def audio_loop(websocket: WebSocket, dg: DeepgramService, connection_state: dict):
+async def audio_loop(
+    websocket: WebSocket,
+    dg: DeepgramService,
+    shutdown_event: asyncio.Event,
+):
     try:
-        while True:
+        while not shutdown_event.is_set():
             pcm = await websocket.receive_bytes()
             if not dg.assistant_speaking:
                 await dg.send_audio(pcm)
     except WebSocketDisconnect:
-        connection_state["connected"] = False
+        shutdown_event.set()
     except Exception as e:
         print("AUDIO LOOP ERROR:", e)
+        shutdown_event.set()
+
 
 async def conversation_loop(
     websocket: WebSocket,
     dg: DeepgramService,
     history: list,
-    connection_state: dict
+    shutdown_event: asyncio.Event,
 ):
     state = InterviewStateManager()
-    while not state.over:
+
+    while not state.over and not shutdown_event.is_set():
         try:
             user_text = await asyncio.wait_for(
                 dg.transcript_queue.get(), timeout=1.0
             )
         except asyncio.TimeoutError:
             if state.expired():
+                shutdown_event.set()
                 break
             continue
 
@@ -49,7 +57,7 @@ async def conversation_loop(
 
         dg.assistant_speaking = True
         dg.start_silence_loop()
-        
+
         async for audio, text in dg.text_to_speech_stream(ai_stream):
             await websocket.send_bytes(audio)
             full_reply += text
@@ -66,11 +74,16 @@ async def conversation_loop(
 
         if "[END_INTERVIEW]" in full_reply:
             state.over = True
-            connection_state["connected"] = False
+            shutdown_event.set()
             break
 
 
-async def send_greeting(websocket: WebSocket, dg: DeepgramService, greeting: str, history: list):
+async def send_greeting(
+    websocket: WebSocket,
+    dg: DeepgramService,
+    greeting: str,
+    history: list,
+):
     await websocket.send_text(json.dumps({
         "type": "transcript",
         "role": "assistant",
@@ -82,9 +95,11 @@ async def send_greeting(websocket: WebSocket, dg: DeepgramService, greeting: str
 
     dg.assistant_speaking = True
     dg.start_silence_loop()
+
     async for audio, _ in dg.text_to_speech_stream(single_text_stream()):
         await websocket.send_bytes(audio)
-    dg.assistant_speaking = False
+
     await dg.stop_silence_loop()
+    dg.assistant_speaking = False
 
     history.append({"role": "assistant", "content": greeting})

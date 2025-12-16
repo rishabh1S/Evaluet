@@ -17,14 +17,21 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.rishabh1s.exporouterexample"
+      "bundleIdentifier": "com.rishabh1s.exporouterexample",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "We use your microphone for live interview conversations.",
+        "NSAudioSessionUsageDescription": "Audio is used for real-time interview communication."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.rishabh1s.exporouterexample"
+      "package": "com.rishabh1s.exporouterexample",
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -45,7 +52,8 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
