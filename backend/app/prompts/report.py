@@ -1,4 +1,4 @@
-from app.models.interview import InterviewSession
+from app.models.interview_sessions import InterviewSession
 
 def build_report_prompt(session: InterviewSession, transcript_text: str) -> str:
     """

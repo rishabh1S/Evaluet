@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import interview as interview_router
 from app.routers import websocket as websocket_router
 from app.db import engine, Base
-from app.models import interview
+from app.models import (interview_sessions,interview_reports,users)
 
 # Create DB Tables
 Base.metadata.create_all(bind=engine)

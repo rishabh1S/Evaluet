@@ -37,8 +37,8 @@ class DeepgramService:
             # This assumes you send raw 16kHz mono linear16 PCM from the client.
             self._listen_cm = self.client.listen.v2.connect(
                 model="flux-general-en",
-                encoding="linear16",      # ONLY format allowed
-                sample_rate="16000"     # MUST be string
+                encoding="linear16",   
+                sample_rate="16000"  
             )
 
             # Manually enter the async context manager
@@ -189,7 +189,7 @@ class DeepgramService:
 
             async for chunk in self.client.speak.v1.audio.generate(
                 text=text,
-                model="aura-2-juno-en",  # or whatever Aura-2 voice you prefer
+                model="aura-2-amalthea-en",  # or whatever Aura-2 voice you prefer
                 encoding="linear16",
                 container="wav"
             ):

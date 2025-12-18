@@ -23324,8 +23324,8 @@ var useStackedZIndex = /* @__PURE__ */ __name((props) => {
       if (typeof zIndexProp == "number") return zIndexProp;
       if (stackZIndex) {
         if (hardcoded) return hardcoded + 1;
-        const highest = Object.values(stackContext).reduce((acc, cur) => Math.max(acc, cur), 0), found = stackLayer * 5e3 + highest + 1;
-        return typeof stackZIndex == "number" ? stackZIndex + found : found;
+        const entries = Object.values(stackContext), baseForLayer = stackLayer * 5e3, nextLayerBase = (stackLayer + 1) * 5e3, validEntries = entries.filter((z) => z < nextLayerBase), highest = validEntries.length > 0 ? Math.max(...validEntries) : baseForLayer, nextZIndex = highest === baseForLayer ? baseForLayer + 1 : highest + 1;
+        return typeof stackZIndex == "number" ? stackZIndex + nextZIndex : nextZIndex;
       }
       return 1;
     }, [stackLayer, zIndexProp, stackZIndex]);
@@ -25049,6 +25049,7 @@ function createSheet({
           flex: hasFit && open ? 0 : 1,
           height: shouldUseFixedHeight ? stableFrameSize.current : hasFit ? void 0 : frameSize,
           pointerEvents: open ? "auto" : "none",
+          "data-state": open ? "open" : "closed",
           ...props,
           children: [/* @__PURE__ */ (0, import_jsx_runtime20.jsx)(StackZIndexContext, {
             zIndex: resolveViewZIndex(props.zIndex),

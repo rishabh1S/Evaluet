@@ -1,11 +1,11 @@
 import asyncio
-from fastapi import APIRouter, WebSocket, Depends
-from sqlalchemy.orm import Session
 from app.db import SessionLocal
+from fastapi import APIRouter, WebSocket, Depends
 from app.services.voice_service import DeepgramService 
 from app.services.report_service import generate_and_send_report
-from app.repository.interview_repository import load_session, persist_session
+from app.repository.interview_repository import load_session
 from app.services.interview_runtime import audio_loop, conversation_loop, send_greeting
+from app.services.interview_finalize import finalize_interview
 
 router = APIRouter()
 
@@ -39,19 +39,15 @@ async def websocket_endpoint(websocket: WebSocket,session_id: str) -> None:
     convo_task = asyncio.create_task(
         conversation_loop(websocket, dg, history, shutdown_event)
     )
-    # ✅ WAIT FOR INTERVIEW TO END
+
     await shutdown_event.wait()
 
-    # ✅ CLEAN SHUTDOWN
     audio_task.cancel()
     convo_task.cancel()
     await dg.stop()
 
-    # ✅ FINALIZE USING NEW DB SESSION
-    from app.services.interview_finalize import finalize_interview
     finalize_interview(session_id, history)
 
-    # ✅ FIRE AND FORGET REPORT
     asyncio.create_task(generate_and_send_report(session_id))
 
     try:

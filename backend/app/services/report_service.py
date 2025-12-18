@@ -1,12 +1,13 @@
 import json
-import os
 import re
 from groq import Groq
 # from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
-from app.models.interview import InterviewSession
+from app.models.interview_sessions import InterviewSession
 from app.db import SessionLocal
 from app.config import settings 
 from app.prompts.report import build_report_prompt
+from app.models.session_status import SessionStatus
+from app.models.interview_reports import InterviewReport
 
 # 1. Email Configuration
 # email_conf = ConnectionConfig(
@@ -30,64 +31,86 @@ async def generate_and_send_report(session_id: str):
     db = SessionLocal()
     try:
         # A. Fetch Session
-        session = db.query(InterviewSession).filter(InterviewSession.session_id == session_id).first()
-        
-        if not session or not session.transcript:
-            print(f"Skipping report: No session or transcript for {session_id}")
+        interview_session = db.query(InterviewSession).filter(InterviewSession.session_id == session_id).with_for_update().first()
+
+        if not interview_session:
+            print(f"No session found for {session_id}")
             return
+        if interview_session.status in [SessionStatus.COMPLETED, SessionStatus.FAILED]:
+            print(f"Session {session_id} already {interview_session.status.value}, skipping")
+            return
+        
+        interview_report = db.query(InterviewReport).filter(InterviewReport.session_id == session_id).first()
+
+        if not interview_report:
+            interview_report = InterviewReport(session_id=session_id)
+            db.add(interview_report)
+            db.flush()
 
         # 1. Sanitize Transcript    
         clean_transcript = []
-        if isinstance(session.transcript, list):
-            for msg in session.transcript:
+        if isinstance(interview_session.transcript, list):
+            for msg in interview_session.transcript:
                 # Ensure content is not None
                 content = msg.get("content", "")
                 role = msg.get("role", "unknown")
-                if content and role in ["user", "assistant"]:
-                    clean_transcript.append(f"{role.upper()}: {content}")
+                if content and content.strip() and role in ["user", "assistant"]:
+                    speaker = "INTERVIEWER" if role == "assistant" else "CANDIDATE"
+                    clean_transcript.append(f"{speaker}: {content.strip()}")
         
-        transcript_text = "\n".join(clean_transcript)
+        transcript_text = "\n\n".join(clean_transcript)
 
         # 2. VALIDATION CHECK (Crucial Fix)
         if not transcript_text.strip():
-            print("Transcript text is empty after cleaning. Cannot generate report.")
+            print(f"Empty transcript after cleaning for {session_id}")
             # Set a fallback status so we know it failed
-            session.status = "FAILED_EMPTY_TRANSCRIPT"
+            interview_session.status = SessionStatus.FAILED
             db.commit()
             return
-
-        print(f"Generating report for {session_id} with {len(transcript_text)} chars...")
+        
+        if len(clean_transcript) < 3:
+            print(f"Very short transcript ({len(clean_transcript)} messages) for {session_id}")
 
         # 3. Generate Feedback (The "Brain")
-        print(f"Generating report for {session_id}...")
+        print(f"Generating report for {session_id}")
+        print(f"Transcript: {len(transcript_text)} chars, {len(clean_transcript)} messages")
         
-        report_prompt = build_report_prompt(session, transcript_text)
+        report_prompt = build_report_prompt(interview_session, transcript_text)
 
         # 4. Call LLM to generate report
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
-            messages=[{"role": "user", "content": report_prompt}],
-            temperature=0.5
-        )
-        raw_response = completion.choices[0].message.content
-        parsed_data = parse_llm_json(raw_response)
-
-        if not parsed_data:
-            session.status = "FAILED_REPORT_PARSE"
+        try: 
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile", 
+                messages=[{"role": "user", "content": report_prompt}],
+                temperature=0.4
+            )
+            raw_response = completion.choices[0].message.content
+        except Exception as e:
+            print(f"Groq API error: {e}")
+            interview_session.status = SessionStatus.FAILED
             db.commit()
             return
+        
+        # 5. Parse JSON response
+        parsed_data = parse_llm_json(raw_response)
         
         # Extract score (Simple heuristic, or you can ask LLM to output JSON)
         # For now, we save the text report.
         
         # C. Save to DB
         try:
-            session.feedback_report = parsed_data.get("report_markdown")
-            session.score = parsed_data.get("score")
-            session.status = "COMPLETED"
+            report = parsed_data.get("report_markdown", "").strip()
+            score = parsed_data.get("score")
+            interview_report.feedback_report = report
+            interview_report.score = score
+            interview_session.status = SessionStatus.COMPLETED
             db.commit()
+            print(f"Report saved successfully for {session_id}")
         except Exception:
+            print(f"Database error while saving report: {e}")
             db.rollback()
+            interview_session.status = SessionStatus.FAILED
+            db.commit()
             raise
         
         # D. Send Email
@@ -105,26 +128,43 @@ async def generate_and_send_report(session_id: str):
         #     print(f"Email sent to {session.user_id}")
             
     except Exception as e:
+        print(f"Unexpected error generating report for {session_id}: {e}")
         db.rollback()
-        print(f"Error generating report: {e}")
+        try:
+            if interview_session:
+                interview_session.status = SessionStatus.FAILED
+                db.commit()
+        except:
+            pass
     finally:
-        print("Completed the report")
         db.close()
+        print(f"Report generation completed for {session_id}")
 
 def parse_llm_json(raw_content: str):
     """
-    Cleans and parses JSON from LLM output, handling markdown blocks if present.
+    Cleans and parses JSON from LLM output, handling various edge cases.
     """
-    try:
-        # 1. Remove markdown code blocks if the LLM included them
-        clean_content = re.sub(r"```json\s*|\s*```", "", raw_content).strip()
-        return json.loads(clean_content)
-    except json.JSONDecodeError:
-        # Fallback: try to find anything that looks like a JSON object
-        match = re.search(r"\{.*\}", clean_content, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except:
-                pass
+    if not raw_content or not raw_content.strip():
+        print("Empty raw content")
         return None
+    
+    # 1. Remove markdown code blocks
+    clean_content = re.sub(r"```(?:json)?\s*", "", raw_content)
+    clean_content = re.sub(r"```\s*$", "", clean_content)
+    clean_content = clean_content.strip()
+    
+    # 2. Try direct parsing first
+    try:
+        return json.loads(clean_content)
+    except json.JSONDecodeError as e:
+        print(f"Direct JSON parse failed: {e}")
+    
+    # 3. Try to extract JSON object using regex
+    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', clean_content, re.DOTALL)
+    if json_match:
+        try:
+            extracted = json_match.group()
+            return json.loads(extracted)
+        except json.JSONDecodeError as e:
+            print(f"Extracted JSON parse failed: {e}")
+    return None

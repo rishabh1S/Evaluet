@@ -2,9 +2,10 @@ import uuid
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db import get_db                
-from app.models.interview import InterviewSession 
+from app.models.interview_sessions import InterviewSession 
 from app.services.pdf_service import extract_text_from_pdf
 from app.prompts.interviewer import build_system_prompt
+from app.models.users import User
 
 router = APIRouter()
 
@@ -35,6 +36,11 @@ async def init_interview(
         job_level=job_level,
         job_role=job_role
     )
+
+    # User validation
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     # 3. Save Session to DB
     session_id = str(uuid.uuid4())
