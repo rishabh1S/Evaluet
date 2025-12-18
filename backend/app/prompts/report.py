@@ -35,4 +35,13 @@ def build_report_prompt(session: InterviewSession, transcript_text: str) -> str:
     - **No Hire**: Does not meet requirements at this time
 
     IMPORTANT: Be specific and reference actual answers from the transcript. Avoid generic feedback.
+    OUTPUT FORMAT:
+    You must return ONLY a JSON object. Do not include any introductory text or markdown code blocks (like ```json).
+    
+    Structure:
+    {{
+        "score": <integer>,
+        "report_markdown": "<full structured report in markdown format content here>"
+    }}
+
     """

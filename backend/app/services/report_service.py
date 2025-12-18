@@ -1,4 +1,6 @@
+import json
 import os
+import re
 from groq import Groq
 # from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from app.models.interview import InterviewSession
@@ -67,14 +69,21 @@ async def generate_and_send_report(session_id: str):
             messages=[{"role": "user", "content": report_prompt}],
             temperature=0.5
         )
-        report_content = completion.choices[0].message.content
+        raw_response = completion.choices[0].message.content
+        parsed_data = parse_llm_json(raw_response)
+
+        if not parsed_data:
+            session.status = "FAILED_REPORT_PARSE"
+            db.commit()
+            return
         
         # Extract score (Simple heuristic, or you can ask LLM to output JSON)
         # For now, we save the text report.
         
         # C. Save to DB
         try:
-            session.feedback_report = report_content
+            session.feedback_report = parsed_data.get("report_markdown")
+            session.score = parsed_data.get("score")
             session.status = "COMPLETED"
             db.commit()
         except Exception:
@@ -96,6 +105,26 @@ async def generate_and_send_report(session_id: str):
         #     print(f"Email sent to {session.user_id}")
             
     except Exception as e:
+        db.rollback()
         print(f"Error generating report: {e}")
     finally:
+        print("Completed the report")
         db.close()
+
+def parse_llm_json(raw_content: str):
+    """
+    Cleans and parses JSON from LLM output, handling markdown blocks if present.
+    """
+    try:
+        # 1. Remove markdown code blocks if the LLM included them
+        clean_content = re.sub(r"```json\s*|\s*```", "", raw_content).strip()
+        return json.loads(clean_content)
+    except json.JSONDecodeError:
+        # Fallback: try to find anything that looks like a JSON object
+        match = re.search(r"\{.*\}", clean_content, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except:
+                pass
+        return None

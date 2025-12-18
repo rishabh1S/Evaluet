@@ -1,7 +1,7 @@
 import asyncio
 from fastapi import APIRouter, WebSocket, Depends
 from sqlalchemy.orm import Session
-from app.db import get_db
+from app.db import SessionLocal
 from app.services.voice_service import DeepgramService 
 from app.services.report_service import generate_and_send_report
 from app.repository.interview_repository import load_session, persist_session
@@ -10,14 +10,11 @@ from app.services.interview_runtime import audio_loop, conversation_loop, send_g
 router = APIRouter()
 
 @router.websocket("/interview/{session_id}")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    session_id: str,
-    db: Session = Depends(get_db)
-) -> None:
+async def websocket_endpoint(websocket: WebSocket,session_id: str) -> None:
     await websocket.accept()
-
+    db = SessionLocal()
     session_data = load_session(db, session_id)
+    db.close()
     if not session_data:
         await websocket.close(code=1008, reason="Invalid session")
         return
@@ -42,24 +39,23 @@ async def websocket_endpoint(
     convo_task = asyncio.create_task(
         conversation_loop(websocket, dg, history, shutdown_event)
     )
+    # ✅ WAIT FOR INTERVIEW TO END
     await shutdown_event.wait()
 
+    # ✅ CLEAN SHUTDOWN
     audio_task.cancel()
     convo_task.cancel()
-
     await dg.stop()
 
-    try:
-        persist_session(db, session_data, history)
-        asyncio.create_task(generate_and_send_report(session_id))
-    except Exception as e:
-        db.rollback()
-        print("Error saving transcript:", e)
-    finally:
-        db.close()
+    # ✅ FINALIZE USING NEW DB SESSION
+    from app.services.interview_finalize import finalize_interview
+    finalize_interview(session_id, history)
+
+    # ✅ FIRE AND FORGET REPORT
+    asyncio.create_task(generate_and_send_report(session_id))
 
     try:
         await websocket.close()
-    except RuntimeError:
+    except Exception:
         pass
 

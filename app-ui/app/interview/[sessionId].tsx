@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { YStack, Button, Text, ScrollView, Circle } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +28,7 @@ export default function InterviewScreenWrapper() {
 /* ---------------- Main Screen ---------------- */
 
 function InterviewScreen() {
+  const router = useRouter();
   const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
@@ -35,27 +36,45 @@ function InterviewScreen() {
   const [status, setStatus] = useState("Connecting…");
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const micStartedRef = useRef(false);
+  const interviewEndedRef = useRef(false);
+  const audioBufferRef = useRef<Uint8Array[]>([]);
+  const playLockRef = useRef<Promise<void> | null>(null);
 
   useKeepAwake();
 
   const { startRecording, stopRecording } = useSharedAudioRecorder();
 
-  /* ---- Timer ---- */
   useEffect(() => {
-    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
+    if (!isRecording || interviewEndedRef.current) return;
+
+    const t = setInterval(() => {
+      setSeconds((s) => s + 1);
+    }, 1000);
+
     return () => clearInterval(t);
-  }, []);
+  }, [isRecording]);
 
   const timeLabel = `${Math.floor(seconds / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 
-  /* ---- WebSocket ---- */
   useEffect(() => {
     ws.current = new WebSocket(`${WS_BASE}/ws/interview/${sessionId}`);
     ws.current.binaryType = "arraybuffer";
 
-    ws.current.onopen = () => setStatus("Connected");
+    ws.current.onopen = async () => {
+      setStatus("Connected");
+
+      if (!micStartedRef.current) {
+        try {
+          await startRecordingSafe();
+          micStartedRef.current = true;
+        } catch (e) {
+          console.warn("Mic start blocked until user tap", e);
+        }
+      }
+    };
 
     ws.current.onmessage = async (e) => {
       if (typeof e.data === "string") {
@@ -70,8 +89,23 @@ function InterviewScreen() {
             },
           ]);
         }
-      } else {
-        await playPcmWav(e.data);
+        if (
+          msg.role === "assistant" &&
+          typeof msg.content === "string" &&
+          msg.content.includes("[END_INTERVIEW]") &&
+          !interviewEndedRef.current
+        ) {
+          interviewEndedRef.current = true;
+          setStatus("Interview completed");
+          setIsRecording(false);
+
+          setTimeout(() => {
+            router.replace("/");
+          }, 2500);
+        }
+      }
+      if (!interviewEndedRef.current && e.data instanceof ArrayBuffer) {
+        enqueueAudio(e.data);
       }
     };
 
@@ -83,7 +117,6 @@ function InterviewScreen() {
     };
   }, [sessionId]);
 
-  /* ---- Cleanup audio on unmount ---- */
   useEffect(() => {
     return () => {
       if (currentSound.current) {
@@ -92,66 +125,122 @@ function InterviewScreen() {
     };
   }, []);
 
-  /* ---- Toggle Recording ---- */
-  async function toggleRecording() {
-    if (isRecording) {
-      await stopRecording();
-      setIsRecording(false);
-      setStatus("Processing…");
-    } else {
-      await startRecording({
-        sampleRate: 16000,
-        channels: 1,
-        encoding: "pcm_16bit",
-        interval: 100,
-        onAudioStream: async (event) => {
-          if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            const base64Data = event.data as string;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            ws.current.send(bytes);
-          }
-        },
+  async function startRecordingSafe() {
+    if (isRecording) return;
+
+    await startRecording({
+      sampleRate: 16000,
+      channels: 1,
+      encoding: "pcm_16bit",
+      interval: 100,
+      onAudioStream: async (event) => {
+        if (!ws.current || interviewEndedRef.current) return;
+
+        const base64 = event.data as string;
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        ws.current.send(bytes);
+      },
+    });
+
+    setIsRecording(true);
+  }
+
+  async function stopRecordingSafe() {
+    if (!isRecording) return;
+    await stopRecording();
+    setIsRecording(false);
+  }
+
+  function enqueueAudio(buffer: ArrayBuffer) {
+    audioBufferRef.current.push(new Uint8Array(buffer));
+    flushAndPlay();
+  }
+
+  async function flushAndPlay() {
+    if (playLockRef.current) return;
+
+    playLockRef.current = (async () => {
+      while (audioBufferRef.current.length > 0) {
+        const chunks = audioBufferRef.current.splice(0, 4);
+        const merged = mergeUint8Arrays(chunks);
+        await playMergedPcm(merged);
+      }
+    })();
+
+    await playLockRef.current;
+    playLockRef.current = null;
+  }
+
+  function mergeUint8Arrays(chunks: Uint8Array[]) {
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    const merged = new Uint8Array(totalLength);
+
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    return merged;
+  }
+
+  function playMergedPcm(pcmData: Uint8Array): Promise<void> {
+    return new Promise((resolve) => {
+      playMergedPcmInternal(pcmData, resolve);
+    });
+  }
+
+  async function playMergedPcmInternal(
+    pcmData: Uint8Array,
+    resolve: () => void
+  ) {
+    try {
+      const base64 = Buffer.from(pcmData).toString("base64");
+
+      const sound = new Audio.Sound();
+      currentSound.current = sound;
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+          resolve();
+        }
       });
-      setIsRecording(true);
-      setStatus("🎤 Listening…");
+
+      await sound.loadAsync(
+        { uri: `data:audio/wav;base64,${base64}` },
+        { shouldPlay: true }
+      );
+    } catch (e) {
+      console.error("TTS playback error:", e);
+      resolve();
     }
   }
 
-  async function playPcmWav(buffer: ArrayBuffer) {
-    try {
-      if (currentSound.current) {
-        await currentSound.current.unloadAsync();
-        currentSound.current = null;
-      }
-
-      const uint8Array = new Uint8Array(buffer);
-      let binaryString = '';
-      for (const element of uint8Array) {
-        binaryString += String.fromCharCode(element);
-      }
-      const base64 = btoa(binaryString);
-
-      const sound = new Audio.Sound();
-      await sound.loadAsync({
-        uri: `data:audio/wav;base64,${base64}`,
-      });
-
-      await sound.playAsync();
-      currentSound.current = sound;
-    } catch (e) {
-      console.error("Audio playback error:", e);
-    }
+  function endInterview() {
+    interviewEndedRef.current = true;
+    ws.current?.send(
+      JSON.stringify({ type: "CONTROL", action: "END_INTERVIEW" })
+    );
+    ws.current?.close();
+    setTimeout(() => {
+      router.replace("/");
+    }, 2500);
   }
 
   return (
     <LinearGradient colors={["#0f172a", "#1e293b"]} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        <InterviewHeader timeLabel={timeLabel} status={status} />
-      
+        <InterviewHeader
+          timeLabel={timeLabel}
+          status={status}
+          onEnd={endInterview}
+        />
+
         <YStack flex={1} p="$4" gap="$4">
           {/* Messages ScrollView */}
           <ScrollView flex={1} showsVerticalScrollIndicator={false}>
@@ -162,16 +251,16 @@ function InterviewScreen() {
                     <MessageCircle size={48} color="#818cf8" />
                   </Circle>
                   <YStack gap="$2" items="center">
-                    <Text 
-                      color="rgba(255,255,255,0.9)" 
-                      fontSize={18} 
+                    <Text
+                      color="rgba(255,255,255,0.9)"
+                      fontSize={18}
                       fontWeight="600"
                       textAlign="center"
                     >
                       Ready to start
                     </Text>
-                    <Text 
-                      color="rgba(255,255,255,0.5)" 
+                    <Text
+                      color="rgba(255,255,255,0.5)"
                       fontSize={15}
                       textAlign="center"
                     >
@@ -186,40 +275,32 @@ function InterviewScreen() {
           </ScrollView>
 
           {/* Single Mic Button */}
-          <YStack items="center" pb="$2" pt="$-1">
+          <YStack items="center" justify="center" pb="$2" pt="$-1">
             <Button
-              onPress={toggleRecording}
+              onPress={() =>
+                isRecording ? stopRecordingSafe() : startRecordingSafe()
+              }
               circular
               size="$8"
               bg={isRecording ? "rgba(241,102,99,0.2)" : "rgba(99,102,241,0.2)"}
               borderColor={isRecording ? "#ef4444" : "#818cf8"}
               borderWidth={3}
-              pressStyle={{
-                scale: 0.92
-              }}
+              pressStyle={{ scale: 0.92 }}
               animation="bouncy"
               style={{
                 width: 80,
                 height: 80,
-                shadowColor: isRecording ? "#472828ff" : "#818cf8",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: isRecording ? 0.5 : 0.3,
-                shadowRadius: isRecording ? 20 : 12,
               }}
             >
-              <Mic 
-                size={32} 
-                color={isRecording ? "#ef4444" : "#818cf8"}
-              />
+              <Mic size={32} color={isRecording ? "#ef4444" : "#818cf8"} />
             </Button>
-            
-            <Text 
-              color={isRecording ? "rgba(255, 50, 50, 0.7)" : "rgba(255,255,255,0.7)"} 
-              fontSize={14} 
+            <Text
+              fontSize={14}
               fontWeight="600"
-              mt="$3"
+              mt="$2"
+              color="rgba(255,255,255,0.7)"
             >
-              {isRecording ? "Tap to stop" : "Tap to speak"}
+              {isRecording ? "Mic on" : "Mic muted"}
             </Text>
           </YStack>
         </YStack>
