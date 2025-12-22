@@ -3,7 +3,7 @@ import json
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.voice_service import DeepgramService 
 from app.services.ai_service import get_ai_response_stream
-from app.domain.interview_state import InterviewStateManager
+from app.core.interview_state import InterviewStateManager
 
 
 async def audio_loop(
