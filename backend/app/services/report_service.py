@@ -106,7 +106,7 @@ async def generate_and_send_report(session_id: str):
             interview_session.status = SessionStatus.COMPLETED
             db.commit()
             print(f"Report saved successfully for {session_id}")
-        except Exception:
+        except Exception as e:
             print(f"Database error while saving report: {e}")
             db.rollback()
             interview_session.status = SessionStatus.FAILED

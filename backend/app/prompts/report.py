@@ -22,6 +22,8 @@ def build_report_prompt(session: InterviewSession, transcript_text: str) -> str:
 
     OUTPUT REQUIREMENTS (CRITICAL):
     - Return ONLY a valid JSON object
+    - ALL newline characters inside strings MUST be escaped as \\n
+    - Use standard ASCII quotes only
     - NO markdown code fences
     - NO extra text
     - NO explanations outside JSON
