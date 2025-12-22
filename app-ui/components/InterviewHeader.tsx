@@ -36,7 +36,7 @@ const InterviewHeader = ({
           </XStack>
           <XStack gap="$2" items="center">
             <Card bg="rgba(0,0,0,0.3)" p="$2">
-              <Text color="#60a5fa" fontSize={14} fontWeight="700">
+              <Text color="#60a5fa" fontWeight="700">
                 {timeLabel}
               </Text>
             </Card>

@@ -1,13 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { YStack, Button, Text, ScrollView, Circle } from "tamagui";
+import { YStack, Button, Text } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FlatList } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../lib/env";
 import * as Crypto from "expo-crypto";
-import { Mic, MessageCircle } from "@tamagui/lucide-icons";
-import { Audio } from "expo-av";
+import { Mic } from "@tamagui/lucide-icons";
+import { createAudioPlayer } from "expo-audio";
 import {
   AudioRecorderProvider,
   useSharedAudioRecorder,
@@ -29,7 +30,6 @@ export default function InterviewScreenWrapper() {
 
 function InterviewScreen() {
   const router = useRouter();
-  const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,6 +40,10 @@ function InterviewScreen() {
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
   const playLockRef = useRef<Promise<void> | null>(null);
+  const audioPlayerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(
+    null
+  );
+  const listRef = useRef<FlatList<Message>>(null);
 
   useKeepAwake();
 
@@ -118,10 +122,11 @@ function InterviewScreen() {
   }, [sessionId]);
 
   useEffect(() => {
+    audioPlayerRef.current = createAudioPlayer();
+
     return () => {
-      if (currentSound.current) {
-        currentSound.current.unloadAsync();
-      }
+      audioPlayerRef.current?.remove();
+      audioPlayerRef.current = null;
     };
   }, []);
 
@@ -165,7 +170,9 @@ function InterviewScreen() {
 
     playLockRef.current = (async () => {
       while (audioBufferRef.current.length > 0) {
-        const chunks = audioBufferRef.current.splice(0, 4);
+        const chunks = audioBufferRef.current.length < 3
+        ? audioBufferRef.current.splice(0)
+        : audioBufferRef.current.splice(0, 4);
         const merged = mergeUint8Arrays(chunks);
         await playMergedPcm(merged);
       }
@@ -188,37 +195,33 @@ function InterviewScreen() {
     return merged;
   }
 
-  function playMergedPcm(pcmData: Uint8Array): Promise<void> {
+  async function playMergedPcm(pcmData: Uint8Array): Promise<void> {
     return new Promise((resolve) => {
-      playMergedPcmInternal(pcmData, resolve);
-    });
-  }
-
-  async function playMergedPcmInternal(
-    pcmData: Uint8Array,
-    resolve: () => void
-  ) {
-    try {
-      const base64 = Buffer.from(pcmData).toString("base64");
-
-      const sound = new Audio.Sound();
-      currentSound.current = sound;
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
+      try {
+        if (!audioPlayerRef.current) {
           resolve();
+          return;
         }
-      });
 
-      await sound.loadAsync(
-        { uri: `data:audio/wav;base64,${base64}` },
-        { shouldPlay: true }
-      );
-    } catch (e) {
-      console.error("TTS playback error:", e);
-      resolve();
-    }
+        const base64 = Buffer.from(pcmData).toString("base64");
+        const uri = `data:audio/wav;base64,${base64}`;
+
+        const player = audioPlayerRef.current;
+
+        player.replace({ uri });
+        player.play();
+
+        const interval = setInterval(() => {
+          if (!player.playing) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 40);
+      } catch (e) {
+        console.error("TTS playback error:", e);
+        resolve();
+      }
+    });
   }
 
   function endInterview() {
@@ -242,37 +245,17 @@ function InterviewScreen() {
         />
 
         <YStack flex={1} p="$4" gap="$4">
-          {/* Messages ScrollView */}
-          <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-            <YStack py="$2">
-              {messages.length === 0 ? (
-                <YStack items="center" justify="center" pt="$10" gap="$4">
-                  <Circle size={100} bg="rgba(99,102,241,0.1)">
-                    <MessageCircle size={48} color="#818cf8" />
-                  </Circle>
-                  <YStack gap="$2" items="center">
-                    <Text
-                      color="rgba(255,255,255,0.9)"
-                      fontSize={18}
-                      fontWeight="600"
-                      textAlign="center"
-                    >
-                      Ready to start
-                    </Text>
-                    <Text
-                      color="rgba(255,255,255,0.5)"
-                      fontSize={15}
-                      textAlign="center"
-                    >
-                      Tap the microphone to begin speaking
-                    </Text>
-                  </YStack>
-                </YStack>
-              ) : (
-                messages.map((m) => <MessageBubble key={m.id} message={m} />)
-              )}
-            </YStack>
-          </ScrollView>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <MessageBubble message={item} />}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => {
+              listRef.current?.scrollToEnd({ animated: true });
+            }}
+          />
 
           {/* Single Mic Button */}
           <YStack items="center" justify="center" pb="$2" pt="$-1">
