@@ -3,17 +3,15 @@ import { Select, Adapt, Sheet } from 'tamagui'
 import { ChevronDown, Check } from '@tamagui/lucide-icons'
 
 const JOB_LEVELS = [
-  { label: 'Entry Level', value: 'entry-level' },
-  { label: 'Junior', value: 'junior' },
-  { label: 'Mid-Level', value: 'mid-level' },
-  { label: 'Senior', value: 'senior' },
-  { label: 'Lead', value: 'lead' },
-  { label: 'Staff', value: 'staff' },
-  { label: 'Principal', value: 'principal' },
+  { label: 'Intern / Trainee', value: 'intern' },
+  { label: 'Entry Level (0–1 years)', value: 'entry' },
+  { label: 'Junior (1–3 years)', value: 'junior' },
+  { label: 'Mid-Level (3–6 years)', value: 'mid' },
+  { label: 'Senior (6–10 years)', value: 'senior' },
+  { label: 'Lead / Team Lead', value: 'lead' },
   { label: 'Manager', value: 'manager' },
-  { label: 'Director', value: 'director' },
-  { label: 'VP', value: 'vp' },
-  { label: 'C-Level', value: 'c-level' },
+  { label: 'Senior Manager', value: 'senior-manager' },
+  { label: 'Director / Head', value: 'director' },
 ]
 
 type Props = {
@@ -30,7 +28,7 @@ export function JobLevelPicker({ jobLevel, setJobLevel }: Props) {
       onOpenChange={setOpen}
       onValueChange={(value) => {
         setJobLevel(value)
-        setOpen(false) // ✅ CLOSE AFTER SELECTION
+        setOpen(false)
       }}
     >
       {/* ---------- Trigger ---------- */}
@@ -42,7 +40,7 @@ export function JobLevelPicker({ jobLevel, setJobLevel }: Props) {
         iconAfter={<ChevronDown size={18} color="white" />}
         pressStyle={{ opacity: 0.85 }}
         focusStyle={{
-          borderColor: '#60a5fa',
+          borderColor: '#351B98',
           bg: 'rgba(0,0,0,0.4)',
         }}
       >

@@ -25,7 +25,7 @@ import { JobLevelPicker } from "components/JobLevelPicker";
 export default function IndexScreen() {
   const [userId, setUserId] = useState("rishabh1s");
   const [jobRole, setJobRole] = useState("Software Engineer");
-  const [jobLevel, setJobLevel] = useState("mid-level");
+  const [jobLevel, setJobLevel] = useState("mid");
   const [jobDesc, setJobDesc] = useState("Must know Java, Springboot, Microservices.");
   const [resume, setResume] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -76,16 +76,16 @@ export default function IndexScreen() {
 
   return (
     <LinearGradient
-      colors={["#0f172a", "#1e293b", "#334155"]}
+      colors={["#0f172a", "#351B98", "#6644DE"]}
       style={{ flex: 1 }}
     >
       <YStack flex={1} justify="center" px="$6" py="$8" gap="$5">
         {/* Header */}
         <YStack gap="$2" items="center" mb="$4">
-          <H2 color="white" text="center" fontWeight="700">
+          <H2 text="center" fontWeight="500">
             AI Interview Setup
           </H2>
-          <Text color="rgba(255,255,255,0.6)" text="center" fontSize={15}>
+          <Text text="center">
             Prepare for your next opportunity
           </Text>
         </YStack>
@@ -93,7 +93,7 @@ export default function IndexScreen() {
         {/* Form Card */}
         <Card
           elevate
-          bg="rgba(255,255,255,0.08)"
+          bg="rgba(255,255,255,0.05)"
           bordered
           borderColor="rgba(255,255,255,0.1)"
           p="$5"
@@ -125,7 +125,7 @@ export default function IndexScreen() {
               color="white"
               height={50}
               focusStyle={{
-                borderColor: "#60a5fa",
+                borderColor: "#351B98",
                 bg: "rgba(0,0,0,0.4)",
               }}
             />
@@ -154,7 +154,7 @@ export default function IndexScreen() {
               color="white"
               height={50}
               focusStyle={{
-                borderColor: "#60a5fa",
+                borderColor: "#351B98",
                 bg: "rgba(0,0,0,0.4)",
               }}
             />
@@ -198,7 +198,7 @@ export default function IndexScreen() {
               color="white"
               multiline
               focusStyle={{
-                borderColor: "#60a5fa",
+                borderColor: "#351B98",
                 bg: "rgba(0,0,0,0.4)",
               }}
             />
