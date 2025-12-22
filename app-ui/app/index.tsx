@@ -231,24 +231,17 @@ export default function IndexScreen() {
         {/* Start Button */}
         <Button
           onPress={startInterview}
-          background="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+          iconAfter={<Play size={22} color="white" fill="white" />}
           height={58}
           disabled={loading}
           opacity={loading ? 0.7 : 1}
           pressStyle={{
             scale: 0.98,
           }}
-          shadowColor="rgba(102,126,234,0.5)"
-          shadowOffset={{ width: 0, height: 8 }}
-          shadowOpacity={0.5}
-          shadowRadius={16}
         >
-          <XStack gap="$3" items="center">
-            <Play size={22} color="white" fill="white" />
             <Text color="white" fontSize={17} fontWeight="700">
               {loading ? "Starting..." : "Start Interview"}
             </Text>
-          </XStack>
         </Button>
       </YStack>
     </LinearGradient>

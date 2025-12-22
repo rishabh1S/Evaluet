@@ -10,6 +10,5 @@ class Settings:
     DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY")
     MAIL_USERNAME: str = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD")
-    MAIL_FROM: str = os.getenv("MAIL_FROM")
 
 settings = Settings()

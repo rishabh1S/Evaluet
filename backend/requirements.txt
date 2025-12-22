@@ -1,6 +1,7 @@
 fastapi
 fastapi-mail
 numpy
+markdown
 uvicorn[standard]
 python-dotenv
 sqlalchemy
