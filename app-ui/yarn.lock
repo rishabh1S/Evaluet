@@ -5150,6 +5150,7 @@ __metadata:
     burnt: "npm:^0.12.2"
     expo: "npm:^54.0.23"
     expo-audio: "npm:~1.1.0"
+    expo-av: "npm:~16.0.8"
     expo-build-properties: "npm:~1.0.9"
     expo-crypto: "npm:~15.0.8"
     expo-dev-client: "npm:~6.0.20"
@@ -6726,6 +6727,21 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10/b2013e196eb56d6b31f62d82e3918d81626b8d48bd3b9c3b50d8d97b8329de8ec1cb700cb61cc03b637371213aa2de78fec10208e742e8e2a2019dbf25777814
+  languageName: node
+  linkType: hard
+
+"expo-av@npm:~16.0.8":
+  version: 16.0.8
+  resolution: "expo-av@npm:16.0.8"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+    react-native-web: "*"
+  peerDependenciesMeta:
+    react-native-web:
+      optional: true
+  checksum: 10/c274ae6b98e30b673d2dd03119da703a379c01367466022fa1d2dc1b17ce9475711488132d2c7271a88ecda3800c5d03697371761fa8330e40ca0c02f9b951fa
   languageName: node
   linkType: hard
 

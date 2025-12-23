@@ -27,7 +27,7 @@
     "buffer": "^6.0.3",
     "burnt": "^0.12.2",
     "expo": "^54.0.23",
-    "expo-audio": "~1.1.0",
+    "expo-av": "~16.0.8",
     "expo-build-properties": "~1.0.9",
     "expo-crypto": "~15.0.8",
     "expo-dev-client": "~6.0.20",

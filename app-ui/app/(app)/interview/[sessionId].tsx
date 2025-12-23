@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../../lib/env";
 import * as Crypto from "expo-crypto";
 import { Mic } from "@tamagui/lucide-icons";
-import { createAudioPlayer } from "expo-audio";
+import { Audio } from "expo-av";
 import {
   AudioRecorderProvider,
   useSharedAudioRecorder,
@@ -30,6 +30,7 @@ export default function InterviewScreenWrapper() {
 
 function InterviewScreen() {
   const router = useRouter();
+  const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,9 +41,7 @@ function InterviewScreen() {
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
   const playLockRef = useRef<Promise<void> | null>(null);
-  const audioPlayerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(
-    null
-  );
+  const assistantSpeakingRef = useRef(false)
   const listRef = useRef<FlatList<Message>>(null);
 
   useKeepAwake();
@@ -122,11 +121,10 @@ function InterviewScreen() {
   }, [sessionId]);
 
   useEffect(() => {
-    audioPlayerRef.current = createAudioPlayer();
-
     return () => {
-      audioPlayerRef.current?.remove();
-      audioPlayerRef.current = null;
+      if (currentSound.current) {
+        currentSound.current.unloadAsync();
+      }
     };
   }, []);
 
@@ -170,9 +168,7 @@ function InterviewScreen() {
 
     playLockRef.current = (async () => {
       while (audioBufferRef.current.length > 0) {
-        const chunks = audioBufferRef.current.length < 3
-        ? audioBufferRef.current.splice(0)
-        : audioBufferRef.current.splice(0, 4);
+        const chunks = audioBufferRef.current.splice(0, 4);
         const merged = mergeUint8Arrays(chunks);
         await playMergedPcm(merged);
       }
@@ -195,33 +191,39 @@ function InterviewScreen() {
     return merged;
   }
 
-  async function playMergedPcm(pcmData: Uint8Array): Promise<void> {
+  function playMergedPcm(pcmData: Uint8Array): Promise<void> {
     return new Promise((resolve) => {
-      try {
-        if (!audioPlayerRef.current) {
-          resolve();
-          return;
-        }
-
-        const base64 = Buffer.from(pcmData).toString("base64");
-        const uri = `data:audio/wav;base64,${base64}`;
-
-        const player = audioPlayerRef.current;
-
-        player.replace({ uri });
-        player.play();
-
-        const interval = setInterval(() => {
-          if (!player.playing) {
-            clearInterval(interval);
-            resolve();
-          }
-        }, 40);
-      } catch (e) {
-        console.error("TTS playback error:", e);
-        resolve();
-      }
+      playMergedPcmInternal(pcmData, resolve);
     });
+  }
+
+  async function playMergedPcmInternal(
+    pcmData: Uint8Array,
+    resolve: () => void
+  ) {
+    try {
+      assistantSpeakingRef.current = true;
+      await stopRecordingSafe();
+
+      const base64 = Buffer.from(pcmData).toString("base64");
+      const sound = new Audio.Sound();
+      currentSound.current = sound;
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+          resolve();
+        }
+      });
+
+      await sound.loadAsync(
+        { uri: `data:audio/wav;base64,${base64}` },
+        { shouldPlay: true }
+      );
+    } catch (e) {
+      console.error("TTS playback error:", e);
+      assistantSpeakingRef.current = false;
+      resolve();
+    }
   }
 
   function endInterview() {
