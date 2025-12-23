@@ -107,17 +107,17 @@ async def generate_and_send_report(session_id: str):
         
         # D. Send Email
         user = db.query(User).filter(User.user_id == interview_session.user_id).first()
-        # if user and user.email:
-        #     try:
-        #         await mail_service.send_interview_report(
-        #             recipient_email=user.email,
-        #             job_role=interview_session.job_role,
-        #             report_markdown=interview_report.feedback_report,
-        #             score=interview_report.score,
-        #         )
-        #         print(f"Email sent to {user.email}")
-        #     except Exception as mail_err:
-        #         print(f"Mail failed (non-fatal): {mail_err}")
+        if user and user.email:
+            try:
+                await mail_service.send_interview_report(
+                    recipient_email=user.email,
+                    job_role=interview_session.job_role,
+                    report_markdown=interview_report.feedback_report,
+                    score=interview_report.score,
+                )
+                print(f"Email sent to {user.email}")
+            except Exception as mail_err:
+                print(f"Mail failed (non-fatal): {mail_err}")
             
     except Exception as e:
         print(f"Unexpected error generating report for {session_id}: {e}")
