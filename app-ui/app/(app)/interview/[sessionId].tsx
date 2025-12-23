@@ -5,7 +5,7 @@ import { FlatList } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
-import { WS_BASE } from "../../lib/env";
+import { WS_BASE } from "../../../lib/env";
 import * as Crypto from "expo-crypto";
 import { Mic } from "@tamagui/lucide-icons";
 import { createAudioPlayer } from "expo-audio";

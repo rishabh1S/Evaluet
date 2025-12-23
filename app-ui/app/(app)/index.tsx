@@ -11,7 +11,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { API_BASE } from "../lib/env";
+import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Upload,
@@ -21,9 +21,9 @@ import {
   Play,
 } from "@tamagui/lucide-icons";
 import { JobLevelPicker } from "components/JobLevelPicker";
+import { authFetch } from "lib/auth";
 
 export default function IndexScreen() {
-  const [userId, setUserId] = useState("rishabh1s");
   const [jobRole, setJobRole] = useState("Software Engineer");
   const [jobLevel, setJobLevel] = useState("mid");
   const [jobDesc, setJobDesc] = useState("Must know Java, Springboot, Microservices.");
@@ -39,7 +39,7 @@ export default function IndexScreen() {
   };
 
   const startInterview = async () => {
-    if (!userId || !jobRole || !jobLevel || !jobDesc || !resume) {
+    if (!jobRole || !jobLevel || !jobDesc || !resume) {
       alert("Please fill all fields");
       return;
     }
@@ -53,10 +53,9 @@ export default function IndexScreen() {
     form.append("job_role", jobRole);
     form.append("job_level", jobLevel);
     form.append("job_desc", jobDesc);
-    form.append("user_id", userId);
 
     try {
-      const res = await fetch(`${API_BASE}/api/interview/init`, {
+      const res = await authFetch(`${API_BASE}/api/interview/init`, {
         method: "POST",
         body: form,
       });
@@ -76,7 +75,7 @@ export default function IndexScreen() {
 
   return (
     <LinearGradient
-      colors={["#0f172a", "#351B98", "#6644DE"]}
+      colors={["#0B1220", "#0F172A", "#111827"]}
       style={{ flex: 1 }}
     >
       <YStack flex={1} justify="center" px="$6" py="$8" gap="$5">
@@ -99,38 +98,6 @@ export default function IndexScreen() {
           p="$5"
           gap="$4"
         >
-          {/* User ID Input */}
-          <YStack gap="$2">
-            <XStack gap="$2" items="center">
-              <FileText size={18} color="rgba(255,255,255,0.7)" />
-              <Text
-                color="rgba(255,255,255,0.9)"
-                fontSize={14}
-                fontWeight="600"
-              >
-                User ID / Email
-              </Text>
-            </XStack>
-            <Input
-              textContentType="emailAddress"
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={userId}
-              onChangeText={setUserId}
-              bg="rgba(0,0,0,0.3)"
-              borderColor="rgba(255,255,255,0.2)"
-              color="white"
-              height={50}
-              focusStyle={{
-                borderColor: "#351B98",
-                bg: "rgba(0,0,0,0.4)",
-              }}
-            />
-          </YStack>
-
           {/* Job Role Input */}
           <YStack gap="$2">
             <XStack gap="$2" items="center">
@@ -235,9 +202,8 @@ export default function IndexScreen() {
           height={58}
           disabled={loading}
           opacity={loading ? 0.7 : 1}
-          pressStyle={{
-            scale: 0.98,
-          }}
+          bg="#2563EB"
+          pressStyle={{ bg: "#1D4ED8", scale: 0.98, }}
         >
             <Text color="white" fontSize={17} fontWeight="700">
               {loading ? "Starting..." : "Start Interview"}

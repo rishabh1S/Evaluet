@@ -31,7 +31,8 @@
       "package": "com.rishabh1s.exporouterexample",
       "permissions": [
         "RECORD_AUDIO"
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",
@@ -59,7 +60,8 @@
           "microphonePermission": "Allow Evaluate to access your microphone.",
           "recordAudioAndroid": true
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

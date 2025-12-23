@@ -8,5 +8,6 @@ class User(Base):
     user_id = Column(String, primary_key=True)
     email = Column(String, unique=True, index=True)
     name = Column(String)
-    
+    password_hash = Column(String, nullable=False)
+    auth_provider = Column(String, default="LOCAL")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

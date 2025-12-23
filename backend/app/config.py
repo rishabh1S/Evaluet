@@ -8,6 +8,7 @@ class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY")
+    JWT_SECRET: str = os.getenv("JWT_SECRET")
     MAIL_USERNAME: str = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD")
 
