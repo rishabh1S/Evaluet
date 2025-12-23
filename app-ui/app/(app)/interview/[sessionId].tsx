@@ -104,7 +104,7 @@ function InterviewScreen() {
 
           setTimeout(() => {
             router.replace("/");
-          }, 2500);
+          }, 5000);
         }
       }
       if (!interviewEndedRef.current && e.data instanceof ArrayBuffer) {
@@ -234,7 +234,7 @@ function InterviewScreen() {
     ws.current?.close();
     setTimeout(() => {
       router.replace("/");
-    }, 2500);
+    }, 5000);
   }
 
   return (
