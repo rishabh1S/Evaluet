@@ -1,38 +1,69 @@
-from app.models.interview import InterviewSession
+from app.models.interview_sessions import InterviewSession
 
 def build_report_prompt(session: InterviewSession, transcript_text: str) -> str:
     """
-    Constructs the prompt for generating the interview feedback report.
-    FIXED: Added missing return statement.
+    Robust report-generation prompt.
+    Designed to NEVER break JSON parsing.
     """
-    return f"""
-    Analyze the following technical interview transcript for a {session.candidate_level} {session.job_role} role.
 
-    TRANSCRIPT:
+    return f"""
+    You are a senior interviewer generating a hiring feedback report.
+
+    ROLE:
+    Candidate interviewed for a {session.candidate_level} {session.job_role} position.
+
+    TRANSCRIPT (verbatim):
     {transcript_text}
 
     TASK:
-    Generate a structured feedback report in Markdown format with the following sections:
-    1. **Overall Score**: Give a score out of 10 based on technical knowledge, communication, and job fit.
-    2. **Strengths**: List 3 specific strengths demonstrated by the candidate. Be concrete and reference actual responses.
-    3. **Weaknesses**: List 3 specific areas for improvement. Be constructive and specific.
-    4. **Technical Assessment**: 
-    - Evaluate technical accuracy of answers
-    - Assess depth of knowledge
-    - Comment on problem-solving approach
-    5. **Communication Skills**:
-    - Clarity and structure of responses
-    - Ability to explain complex concepts
-    - Professional demeanor
-    6. **Job Fit Analysis**:
-    - How well the candidate's experience aligns with the role
-    - Relevant skills demonstrated
-    - Potential growth areas
-    7. **Recommendation**: Provide one of the following:
-    - **Strong Hire**: Exceptional candidate, highly recommended
-    - **Hire**: Good candidate, meets requirements
-    - **Maybe**: Has potential but needs development
-    - **No Hire**: Does not meet requirements at this time
+    Generate a structured hiring evaluation based ONLY on the transcript.
+    Do NOT invent information.
+    If something is unclear, state it explicitly.
 
-    IMPORTANT: Be specific and reference actual answers from the transcript. Avoid generic feedback.
+    OUTPUT REQUIREMENTS (CRITICAL):
+    - Return ONLY a valid JSON object.
+    - DO NOT escape single quotes (e.g., use "candidate's" NOT "candidate\'s").
+    - ALL newline characters inside the "report_markdown" string MUST be written as literal \n.
+    - Ensure the entire JSON is on a single line if possible, or properly escaped.
+    - Use double quotes for JSON keys and string values.
+    - NO explanations outside JSON
+
+    JSON STRUCTURE (MANDATORY):
+    {{
+    "score": <integer from 1 to 10>,
+    "report_markdown": "<complete markdown report>"
+    }}
+
+    REPORT CONTENT (inside report_markdown):
+    Include the following sections in Markdown:
+
+    ## Overall Score
+    Explain the score briefly.
+
+    ## Strengths
+    List 2–3 specific strengths with references to answers.
+
+    ## Weaknesses
+    List 2–3 concrete improvement areas.
+
+    ## Technical Assessment
+    Evaluate accuracy, depth, and problem-solving.
+
+    ## Communication Skills
+    Assess clarity, structure, and articulation.
+
+    ## Job Fit Analysis
+    Alignment with role requirements and growth potential.
+
+    ## Recommendation
+    Choose ONE:
+    - Strong Hire
+    - Hire
+    - Maybe
+    - No Hire
+
+    IMPORTANT:
+    - Be concise
+    - Be specific
+    - Avoid generic statements
     """

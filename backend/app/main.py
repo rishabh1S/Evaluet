@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import interview as interview_router
+from app.routers import auth as auth_router
 from app.routers import websocket as websocket_router
 from app.db import engine, Base
-from app.models import interview
+from app.models import (interview_sessions,interview_reports,users)
 
 # Create DB Tables
 Base.metadata.create_all(bind=engine)
@@ -24,6 +25,7 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(interview_router.router, prefix="/api/interview", tags=["Interview"])
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(websocket_router.router, prefix="/ws", tags=["WebSocket"])
 
 @app.get("/")

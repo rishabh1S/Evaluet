@@ -1,163 +1,202 @@
 import asyncio
-from typing import AsyncGenerator
-from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions, SpeakOptions
-from app.config import settings 
+import io
+from typing import AsyncGenerator, Optional
 
-# Initialize Client
-deepgram = DeepgramClient(settings.DEEPGRAM_API_KEY)
+import numpy as np
+from deepgram import AsyncDeepgramClient
+from deepgram.core.events import EventType
+from deepgram.extensions.types.sockets import ListenV2SocketClientResponse
+
+# 100ms of silence @ 16kHz mono int16
+_SILENCE_FRAME = (np.zeros(1600, dtype=np.int16)).tobytes()
+
 
 class DeepgramService:
     def __init__(self):
-        self.dg_connection = deepgram.listen.live.v("1")
-        self.transcript_queue = asyncio.Queue() 
-        self.assistant_speaking = False 
-        self.setup_callbacks()
-        self.keep_alive_task = None # Handle for the background task
+        # Reads DEEPGRAM_API_KEY / DEEPGRAM_ACCESS_TOKEN from env
+        self.client = AsyncDeepgramClient()
+        self._listen_cm = None          # context manager for listen.v2
+        self.connection = None          # listen.v2 connection
 
-    def setup_callbacks(self):
-        def on_message(sender, result, **kwargs):
-            try:
-                if result.channel and result.channel.alternatives:
-                    sentence = result.channel.alternatives[0].transcript
-                    if len(sentence) > 0 and result.is_final:
-                        print(f"User (Final): {sentence}")
-                        if not self.assistant_speaking:
-                            self.transcript_queue.put_nowait(sentence)
-            except Exception as e:
-                print(f"Callback Error: {e}")
+        self.transcript_queue: asyncio.Queue[str] = asyncio.Queue()
+        self.assistant_speaking: bool = False
 
-        def on_error(sender, error, **kwargs):
-            print(f"Deepgram Error: {error}")
+        # Silence keepalive
+        self._silence_task: Optional[asyncio.Task] = None
+        self._silence_interval: float = 0.4  # seconds between silence frames
 
-        def on_close(sender, close_event, **kwargs):
-            print(f"Deepgram Connection Closed: {close_event}")
-
-        self.dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
-        self.dg_connection.on(LiveTranscriptionEvents.Error, on_error)
-        self.dg_connection.on(LiveTranscriptionEvents.Close, on_close)
-
-    async def start(self):
-        options = LiveOptions(
-            model="nova-3",
-            language="en-US",
-            smart_format=True,
-            # encoding="linear16", # Raw PCM from phone
-            # channels=1,
-            # sample_rate=16000,
-            interim_results=True,
-            utterance_end_ms=1200,
-            endpointing=300,
-            filler_words=True,
-            vad_events=True
-        )
-        
-        result = self.dg_connection.start(options)
-        if result is False:
-            print("Failed to start Deepgram connection")
-            return False
-            
-        print("Deepgram connection started successfully")
-            
-        # START KEEP ALIVE TASK
-        self.keep_alive_task = asyncio.create_task(self._keep_alive_loop())
-        return True
-
-    async def _keep_alive_loop(self):
+    # =========================
+    #   FLUX STT START/STOP
+    # =========================
+    async def start(self) -> bool:
         """
-        Sends a KeepAlive message every 5 seconds to prevent timeout.
-        FIXED: Uses synchronous send() in executor to avoid await issues.
-        """
-        while True:
-            await asyncio.sleep(5)
-            try:
-                # Use the built-in keep_alive method if available
-                if hasattr(self.dg_connection, 'keep_alive'):
-                    # This is synchronous, so run it in an executor
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, self.dg_connection.keep_alive)
-                    print("[KeepAlive] sent")
-                else:
-                    print("[KeepAlive] method not available")
-                    
-            except Exception as e:
-                print(f"[KeepAlive ERROR] {e}")
-                # If keepalive fails repeatedly, connection might be dead
-                break
-
-    async def send_audio(self, audio_data: bytes):
-        """
-        Sends audio data to Deepgram.
-        FIXED: Run synchronous send() in executor.
+        Start a Flux listen.v2 connection, using EndOfTurn events as final user text.
         """
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self.dg_connection.send, audio_data)
+            # Required Flux settings: model, audio format, sample rate
+            # This assumes you send raw 16kHz mono linear16 PCM from the client.
+            self._listen_cm = self.client.listen.v2.connect(
+                model="flux-general-en",
+                encoding="linear16",   
+                sample_rate="16000"  
+            )
+
+            # Manually enter the async context manager
+            self.connection = await self._listen_cm.__aenter__()
+
+            # Register handlers
+            self.connection.on(EventType.OPEN, lambda _: print("[Flux] connection opened"))
+            self.connection.on(EventType.ERROR, lambda e: print("[Flux] ERROR:", e))
+            self.connection.on(EventType.CLOSE, lambda _: print("[Flux] connection closed"))
+            self.connection.on(EventType.MESSAGE, self._on_message)
+
+            asyncio.create_task(self.connection.start_listening())
+
+            print("Flux connection started successfully")
+            return True
+
         except Exception as e:
-            print(f"Send Audio Error: {e}")
+            print("Deepgram Start Error:", e)
+            return False
 
     async def stop(self):
         """
-        Properly cleanup the connection.
+        Cleanly close listen connection and silence loop.
         """
-        # Cancel KeepAlive before closing
-        if self.keep_alive_task and not self.keep_alive_task.done():
-            self.keep_alive_task.cancel()
+        await self.stop_silence_loop()
+
+        try:
+            if self._listen_cm:
+                # Exit the context manager we manually entered
+                await self._listen_cm.__aexit__(None, None, None)
+
+        except Exception as e:
+            print("Deepgram stop error:", e)
+        finally:
+            self.connection = None
+            self._listen_cm = None
+
+    # =========================
+    #   FLUX EVENT HANDLER
+    # =========================
+    def _on_message(self, message: ListenV2SocketClientResponse) -> None:
+        """
+        Handle Flux Listen v2 messages and push final turns into transcript_queue.
+
+        For Flux:
+          - Final turns:   type == "TurnInfo" and event == "EndOfTurn"
+          - Transcript:    message.transcript (top level)
+        """
+        msg_type = getattr(message, "type", None)
+        event = getattr(message, "event", None)
+        transcript = getattr(message, "transcript", None)
+
+        # Debug while integrating:
+        # print("[Flux raw]", msg_type, event, transcript)
+
+        # Streamed partials (optional log)
+        if transcript and not self.assistant_speaking:
+            print("User (stream):", transcript)
+
+        # End-of-turn final transcript
+        if msg_type == "TurnInfo" and event == "EndOfTurn":
+            final_text = (transcript or "").strip()
+            if final_text and not self.assistant_speaking:
+                print("[Flux EndOfTurn]", final_text)
+                self.transcript_queue.put_nowait(final_text)
+
+    # =========================
+    #   AUDIO INPUT TO FLUX
+    # =========================
+    async def send_audio(self, audio_data: bytes):
+        """
+        Send raw 16-bit mono PCM @ 16kHz to Flux.
+        Make sure your frontend encodes audio exactly like this.
+        """
+        if not self.connection:
+            return
+        try:
+            # SDK example uses the internal _send for raw binary frames
+            await self.connection._send(audio_data)
+            # If/when SDK exposes send_media for async, you can switch:
+            # await self.connection.send_media(audio_data)
+        except Exception as e:
+            print("[Flux] send_audio error:", e)
+
+    # =========================
+    #   SILENCE KEEPALIVE
+    # =========================
+    async def _silence_loop(self):
+        """Continuously send small silence frames until cancelled."""
+        try:
+            while True:
+                if self.connection:
+                    try:
+                        await self.connection._send(_SILENCE_FRAME)
+                    except Exception:
+                        # Connection might be closing; ignore
+                        pass
+                await asyncio.sleep(self._silence_interval)
+        except asyncio.CancelledError:
+            return
+
+    def start_silence_loop(self):
+        """Start background task that keeps Flux alive while assistant is speaking."""
+        if not self._silence_task or self._silence_task.done():
+            self._silence_task = asyncio.create_task(self._silence_loop())
+
+    async def stop_silence_loop(self):
+        """Stop the silence background task."""
+        if self._silence_task and not self._silence_task.done():
+            self._silence_task.cancel()
             try:
-                await self.keep_alive_task
+                await self._silence_task
             except asyncio.CancelledError:
                 pass
-        
-        # Finish the connection
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self.dg_connection.finish)
-            print("Deepgram connection closed")
-        except Exception as e:
-            print(f"Error closing Deepgram: {e}")
+            self._silence_task = None
 
-    async def text_to_speech_stream(self, text_stream: AsyncGenerator[str, None]):
+    # =========================
+    #   TTS (AURA-2)
+    # =========================
+    async def text_to_speech_stream(
+        self,
+        text_stream: AsyncGenerator[str, None]
+    ) -> AsyncGenerator[tuple[bytes, str], None]:
         """
-        Converts streaming text to audio chunks.
-        Yields (audio_bytes, text_segment) tuples.
+        Takes a text-token async generator and yields (audio_chunk_bytes, text_so_far).
+        You already use this in your convo loop.
         """
         current_sentence = ""
-
         async for token in text_stream:
             current_sentence += token
-            if any(punct in token for punct in [".", "?", "!", "\n"]):
-                if current_sentence.strip():
-                    audio_chunk = await self._generate_audio(current_sentence)
-                    if audio_chunk:
-                        yield (audio_chunk, current_sentence)
-                    current_sentence = ""
-        
-        # Handle remaining text
-        if current_sentence.strip():
-            audio_chunk = await self._generate_audio(current_sentence)
-            if audio_chunk:
-                yield (audio_chunk, current_sentence)
+            if any(p in token for p in [".", "?", "!", "\n"]):
+                audio = await self._tts(current_sentence)
+                if audio:
+                    yield (audio, current_sentence)
+                current_sentence = ""
 
-    async def _generate_audio(self, text: str) -> bytes:
+        if current_sentence.strip():
+            audio = await self._tts(current_sentence)
+            if audio:
+                yield (audio, current_sentence)
+
+    async def _tts(self, text: str) -> Optional[bytes]:
         """
-        Generate audio from text using Deepgram TTS.
+        Deepgram v5 TTS via Aura-2 (streaming → collected into a single bytes blob).
         """
         try:
-            options = SpeakOptions(
-                model="aura-2-juno-en",
+            audio_bytes = io.BytesIO()
+
+            async for chunk in self.client.speak.v1.audio.generate(
+                text=text,
+                model="aura-2-amalthea-en",  # or whatever Aura-2 voice you prefer
                 encoding="linear16",
                 container="wav"
-            )
-    
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: deepgram.speak.rest.v("1").stream({"text": text}, options)
-            )
-            
-            # Read the audio data
-            audio_data = response.stream.read()
-            return audio_data
-            
+            ):
+                audio_bytes.write(chunk)
+
+            return audio_bytes.getvalue()
+
         except Exception as e:
-            print(f"TTS Error: {e}")
+            print("TTS Error:", e)
             return None
