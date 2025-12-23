@@ -14,7 +14,7 @@ export default function Login() {
   const router = useRouter();
 
   const login = async () => {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -27,6 +27,7 @@ export default function Login() {
 
     const { access_token } = await res.json();
     await setToken(access_token);
+    await new Promise(res => setTimeout(res, 50))
     router.replace("/");
   };
 

@@ -1,63 +1,53 @@
-import { Stack, Redirect } from "expo-router";
-import { useEffect, useState } from "react";
-import { getToken } from "../../lib/auth";
-import { YStack, Spinner, useTheme } from "tamagui";
+import { Stack, Redirect } from "expo-router"
+import { useEffect, useState } from "react"
+import { getValidToken } from "../../lib/auth"
+import { YStack, Spinner, useTheme } from "tamagui"
 
 export default function AppLayout() {
-  const [checking, setChecking] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
-  const theme = useTheme();
+  const [checking, setChecking] = useState(true)
+  const [authenticated, setAuthenticated] = useState(false)
+  const theme = useTheme()
 
   useEffect(() => {
-    getToken().then((token) => {
-      setAuthenticated(!!token);
-      setChecking(false);
-    });
-  }, []);
+    let mounted = true
+
+    getValidToken().then(token => {
+      if (!mounted) return
+      setAuthenticated(!!token)
+      setChecking(false)
+    })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   if (checking) {
     return (
       <YStack flex={1} justify="center" items="center">
         <Spinner size="large" />
       </YStack>
-    );
+    )
   }
 
   if (!authenticated) {
-    return <Redirect href="../../login" />;
+    return <Redirect href="/(auth)/login" />
   }
 
   return (
     <Stack
       screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.background.val,
-        },
-        headerTitleStyle: {
-          color: theme.color.val,
-        },
+        headerStyle: { backgroundColor: theme.background.val },
+        headerTitleStyle: { color: theme.color.val },
         headerTintColor: theme.color.val,
-        contentStyle: {
-          backgroundColor: theme.background.val,
-        },
+        contentStyle: { backgroundColor: theme.background.val },
       }}
     >
-      {/* Setup Screen */}
-      <Stack.Screen
-        name="index"
-        options={{
-          headerShown: false,
-        }}
-      />
-
-      {/* Interview Screen */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="interview/[sessionId]"
-        options={{
-          headerShown: false,
-          gestureEnabled: false, // avoid accidental back during interview
-        }}
+        options={{ headerShown: false, gestureEnabled: false }}
       />
     </Stack>
-  );
+  )
 }

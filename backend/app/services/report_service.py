@@ -1,4 +1,4 @@
-import json
+import dirtyjson
 import re
 from groq import Groq
 from app.models.interview_sessions import InterviewSession
@@ -83,6 +83,12 @@ async def generate_and_send_report(session_id: str):
         # 5. Parse JSON response
         parsed_data = parse_llm_json(raw_response)
         
+        if not parsed_data:
+            print(f"Failed to parse LLM response for {session_id}")
+            interview_session.status = SessionStatus.FAILED
+            db.commit()
+            return
+        
         # C. Save to DB
         try:
             report = parsed_data.get("report_markdown", "").strip()
@@ -101,17 +107,17 @@ async def generate_and_send_report(session_id: str):
         
         # D. Send Email
         user = db.query(User).filter(User.user_id == interview_session.user_id).first()
-        if user and user.email:
-            try:
-                await mail_service.send_interview_report(
-                    recipient_email=user.email,
-                    job_role=interview_session.job_role,
-                    report_markdown=interview_report.feedback_report,
-                    score=interview_report.score,
-                )
-                print(f"Email sent to {user.email}")
-            except Exception as mail_err:
-                print(f"Mail failed (non-fatal): {mail_err}")
+        # if user and user.email:
+        #     try:
+        #         await mail_service.send_interview_report(
+        #             recipient_email=user.email,
+        #             job_role=interview_session.job_role,
+        #             report_markdown=interview_report.feedback_report,
+        #             score=interview_report.score,
+        #         )
+        #         print(f"Email sent to {user.email}")
+        #     except Exception as mail_err:
+        #         print(f"Mail failed (non-fatal): {mail_err}")
             
     except Exception as e:
         print(f"Unexpected error generating report for {session_id}: {e}")
@@ -129,56 +135,24 @@ async def generate_and_send_report(session_id: str):
 
 def parse_llm_json(raw_content: str):
     """
-    Cleans and parses JSON from LLM output, handling various edge cases.
+    Uses dirtyjson to handle the 'almost-JSON' often returned by LLMs.
     """
     if not raw_content or not raw_content.strip():
-        print("parse_llm_json: empty LLM response")
         return None
 
+    # 1. Remove markdown code fences
     text = raw_content.strip()
-
-    # --------------------------------------------------
-    # 1. Remove markdown code fences if present
-    # --------------------------------------------------
-    # Removes ```json, ```JSON, ``` and closing ```
     text = re.sub(r"```(?:json|JSON)?\s*", "", text)
     text = re.sub(r"\s*```", "", text)
 
-    # --------------------------------------------------
-    # 2. Fast path: try parsing whole content
-    # --------------------------------------------------
     try:
-        parsed = json.loads(text)
-        if isinstance(parsed, dict):
-            return parsed
-    except json.JSONDecodeError:
-        pass  # expected for most LLM outputs
-
-    # --------------------------------------------------
-    # 3. Extract FIRST valid JSON object using stack parsing
-    # --------------------------------------------------
-    start = text.find("{")
-    if start == -1:
-        print("parse_llm_json: no '{' found")
+        # 2. dirtyjson handles invalid escapes like \' and missing trailing braces
+        parsed = dirtyjson.loads(text)
+        
+        # dirtyjson might return a AttributedDict; convert to standard dict
+        if hasattr(parsed, "to_dict"):
+            return parsed.to_dict()
+        return dict(parsed)
+    except Exception as e:
+        print(f"parse_llm_json: Final fallback failed: {e}")
         return None
-
-    brace_count = 0
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            brace_count += 1
-        elif text[i] == "}":
-            brace_count -= 1
-
-        if brace_count == 0:
-            candidate = text[start : i + 1]
-            try:
-                parsed = json.loads(candidate)
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError as e:
-                print(f"parse_llm_json: extracted JSON invalid: {e}")
-                return None
-
-    print("parse_llm_json: unmatched braces, invalid JSON")
-    return None
-    

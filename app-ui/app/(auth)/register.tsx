@@ -28,6 +28,7 @@ export default function Register() {
 
     const { access_token } = await res.json();
     await setToken(access_token);
+    await new Promise(res => setTimeout(res, 50))
     router.replace("/");
   };
 

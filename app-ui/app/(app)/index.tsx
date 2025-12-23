@@ -25,7 +25,7 @@ import { authFetch } from "lib/auth";
 
 export default function IndexScreen() {
   const [jobRole, setJobRole] = useState("Software Engineer");
-  const [jobLevel, setJobLevel] = useState("mid");
+  const [jobLevel, setJobLevel] = useState("Mid-Level");
   const [jobDesc, setJobDesc] = useState("Must know Java, Springboot, Microservices.");
   const [resume, setResume] = useState<any>(null);
   const [loading, setLoading] = useState(false);

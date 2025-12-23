@@ -3,15 +3,15 @@ import { Select, Adapt, Sheet } from 'tamagui'
 import { ChevronDown, Check } from '@tamagui/lucide-icons'
 
 const JOB_LEVELS = [
-  { label: 'Intern / Trainee', value: 'intern' },
-  { label: 'Entry Level (0–1 years)', value: 'entry' },
-  { label: 'Junior (1–3 years)', value: 'junior' },
-  { label: 'Mid-Level (3–6 years)', value: 'mid' },
-  { label: 'Senior (6–10 years)', value: 'senior' },
-  { label: 'Lead / Team Lead', value: 'lead' },
-  { label: 'Manager', value: 'manager' },
-  { label: 'Senior Manager', value: 'senior-manager' },
-  { label: 'Director / Head', value: 'director' },
+  { label: 'Intern / Trainee', value: 'Intern' },
+  { label: 'Entry Level (0–1 years)', value: 'Entry Level' },
+  { label: 'Junior (1–3 years)', value: 'Junior' },
+  { label: 'Mid-Level (3–6 years)', value: 'Mid-Level' },
+  { label: 'Senior (6–10 years)', value: 'Senior' },
+  { label: 'Lead / Team Lead', value: 'Lead / Team Lead' },
+  { label: 'Manager', value: 'Manager' },
+  { label: 'Senior Manager', value: 'Senior Manager' },
+  { label: 'Director / Head', value: 'Director / Head' },
 ]
 
 type Props = {
@@ -76,7 +76,7 @@ export function JobLevelPicker({ jobLevel, setJobLevel }: Props) {
                   index={index}
                   value={level.value}
                 >
-                  <Select.ItemText>{level.value}</Select.ItemText>
+                  <Select.ItemText>{level.label}</Select.ItemText>
                   <Select.ItemIndicator marginLeft="auto">
                     <Check size={16} />
                   </Select.ItemIndicator>

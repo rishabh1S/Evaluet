@@ -6,6 +6,7 @@ passlib==1.7.4
 bcrypt==4.0.1
 python-jose 
 uvicorn[standard]
+dirtyjson
 python-dotenv
 sqlalchemy
 psycopg2-binary  # For NeonDB (Postgres)
