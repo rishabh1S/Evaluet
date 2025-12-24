@@ -20,6 +20,9 @@ class InterviewSession(Base):
     job_role = Column(String)
     job_description = Column(Text)
     candidate_level = Column(String)
+
+    # Voice Model
+    voice_model = Column(String, nullable=True)
     
     # Context
     system_prompt = Column(Text) # The "Brain" context

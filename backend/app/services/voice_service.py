@@ -12,7 +12,7 @@ _SILENCE_FRAME = (np.zeros(1600, dtype=np.int16)).tobytes()
 
 
 class DeepgramService:
-    def __init__(self):
+    def __init__(self, voice_model: str = "aura-2-amalthea-en"):
         # Reads DEEPGRAM_API_KEY / DEEPGRAM_ACCESS_TOKEN from env
         self.client = AsyncDeepgramClient()
         self._listen_cm = None          # context manager for listen.v2
@@ -20,6 +20,7 @@ class DeepgramService:
 
         self.transcript_queue: asyncio.Queue[str] = asyncio.Queue()
         self.assistant_speaking: bool = False
+        self.voice_model = voice_model
 
         # Silence keepalive
         self._silence_task: Optional[asyncio.Task] = None
@@ -189,7 +190,7 @@ class DeepgramService:
 
             async for chunk in self.client.speak.v1.audio.generate(
                 text=text,
-                model="aura-2-amalthea-en",  # or whatever Aura-2 voice you prefer
+                model=self.voice_model, 
                 encoding="linear16",
                 container="wav"
             ):

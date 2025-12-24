@@ -1,6 +1,6 @@
 import asyncio
 from app.db import SessionLocal
-from fastapi import APIRouter, WebSocket, Depends
+from fastapi import APIRouter, WebSocket
 from app.services.voice_service import DeepgramService 
 from app.services.report_service import generate_and_send_report
 from app.repository.interview_repository import load_session
@@ -19,7 +19,7 @@ async def websocket_endpoint(websocket: WebSocket,session_id: str) -> None:
         await websocket.close(code=1008, reason="Invalid session")
         return
 
-    dg = DeepgramService()
+    dg = DeepgramService(voice_model=session_data.voice_model)
     if not await dg.start():
         await websocket.close(code=1011, reason="Deepgram connection failed")
         return

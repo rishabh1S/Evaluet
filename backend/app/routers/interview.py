@@ -95,6 +95,7 @@ async def init_interview(
         candidate_level=job_level,
         system_prompt=system_prompt,
         interviewer_id=interviewer.id,
+        voice_model=interviewer.voice_model,
     )
     
     db.add(new_session)
