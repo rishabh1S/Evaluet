@@ -30,5 +30,10 @@ Job Requirements: {job_desc}
 ═══════════════════════════════════════════════════════════
 CANDIDATE RESUME
 ═══════════════════════════════════════════════════════════
+The resume below is REFERENCE MATERIAL.
+Do not quote it verbatim.
+Do not summarize it.
+Use it only to validate depth through questioning.
+
 {resume_text}
 """
