@@ -1,4 +1,3 @@
-import os
 from groq import Groq
 from typing import AsyncGenerator
 from app.config import settings 
