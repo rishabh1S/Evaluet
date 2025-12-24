@@ -37,3 +37,6 @@ secrets/
 **/venv/
 **/__pycache__/
 **/*.pyc
+
+# System prompts
+test.py
