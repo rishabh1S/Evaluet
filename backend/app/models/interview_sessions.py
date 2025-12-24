@@ -12,6 +12,9 @@ class InterviewSession(Base):
     
     # User Details
     user_id = Column(String, ForeignKey("users.user_id"), index=True)
+
+    # Interviewer Character
+    interviewer_id = Column(String, ForeignKey("interviewer_characters.id"))
     
     # Job Details
     job_role = Column(String)
@@ -23,8 +26,7 @@ class InterviewSession(Base):
     
     # Stores the full conversation [{"role": "user", "content": "..."}, ...]
     transcript = Column(JSON, nullable=True) 
-    
-    # Status: 'ACTIVE', 'COMPLETED', 'PENDING_REPORT'
+
     status = Column(
         SQLEnum(SessionStatus, name="session_status_enum"),
         default=SessionStatus.ACTIVE,

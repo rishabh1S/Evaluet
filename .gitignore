@@ -40,3 +40,6 @@ secrets/
 
 # System prompts
 test.py
+
+#Database queries
+db/

@@ -9,6 +9,7 @@ from app.models.session_status import SessionStatus
 from app.models.interview_reports import InterviewReport
 from app.services.mail_service import MailService
 from app.models.users import User
+from app.models.interviewer_character import InterviewerCharacter
 
 client = Groq(api_key=settings.GROQ_API_KEY)
 mail_service = MailService()
@@ -21,6 +22,8 @@ async def generate_and_send_report(session_id: str):
     try:
         # A. Fetch Session
         interview_session = db.query(InterviewSession).filter(InterviewSession.session_id == session_id).with_for_update().first()
+
+        interviewer = db.query(InterviewerCharacter).filter(InterviewerCharacter.id == interview_session.interviewer_id).first()
 
         if not interview_session:
             print(f"No session found for {session_id}")
@@ -64,7 +67,11 @@ async def generate_and_send_report(session_id: str):
         print(f"Generating report for {session_id}")
         print(f"Transcript: {len(transcript_text)} chars, {len(clean_transcript)} messages")
         
-        report_prompt = build_report_prompt(interview_session, transcript_text)
+        report_prompt = build_report_prompt(
+            session=interview_session,
+            transcript_text=transcript_text,
+            evaluation_prompt=interviewer.evaluation_prompt
+        )
 
         # 4. Call LLM to generate report
         try: 

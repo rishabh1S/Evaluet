@@ -1,14 +1,41 @@
 import uuid
+from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db import get_db                
 from app.models.interview_sessions import InterviewSession 
 from app.services.pdf_service import extract_text_from_pdf
-from app.prompts.interviewer import build_system_prompt
 from app.models.users import User
 from app.auth.dependencies import get_current_user_id
+from app.models.interviewer_character import InterviewerCharacter
+from app.models.dto.interviewer import InterviewerPublicDTO
+from app.prompts.interviewer import build_system_prompt
 
 router = APIRouter()
+
+@router.get("/all_interviewers", response_model=List[InterviewerPublicDTO])
+async def get_all_interviewers(db: Session = Depends(get_db)):
+    rows = (db.query(
+            InterviewerCharacter.id,
+            InterviewerCharacter.name,
+            InterviewerCharacter.description,
+            InterviewerCharacter.profile_image_url,
+            InterviewerCharacter.focus_areas,
+        ).filter(InterviewerCharacter.is_active == True)
+        .all()
+    )
+
+    return [
+        InterviewerPublicDTO(
+            id=row.id,
+            name=row.name,
+            description=row.description,
+            profile_image_url=row.profile_image_url,
+            focus_areas=row.focus_areas,
+        )
+        for row in rows
+    ]
+
 
 @router.post("/init")
 async def init_interview(
@@ -16,6 +43,7 @@ async def init_interview(
     job_desc: str = Form(...),
     job_level: str = Form(...),
     job_role: str = Form(...),
+    interviewer_id: str = Form(...),
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -28,10 +56,23 @@ async def init_interview(
     
     if not resume_text:
         raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+    
+    # Fetch Interviewer Character
+    interviewer = (
+        db.query(InterviewerCharacter)
+        .filter(
+        InterviewerCharacter.id == interviewer_id,
+        InterviewerCharacter.is_active == True
+        ).first()
+    )
+
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Interviewer not found")
 
     # 2. Construct the System Prompt (The "Brain")
     # This guides the AI on how to behave during the WebSocket session
     system_prompt = build_system_prompt(
+        character_prompt=interviewer.behavior_prompt,
         resume_text=resume_text,
         job_desc=job_desc,
         job_level=job_level,
@@ -52,7 +93,8 @@ async def init_interview(
         job_role=job_role,
         job_description=job_desc,
         candidate_level=job_level,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        interviewer_id=interviewer.id,
     )
     
     db.add(new_session)
