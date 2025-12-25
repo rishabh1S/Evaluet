@@ -205,7 +205,7 @@ export default function IndexScreen() {
                       <Card
                         key={interviewer.id}
                         onPress={() => setSelectedInterviewer(interviewer)}
-                        p="$2.5"
+                        p="$3"
                         bg={
                           isSelected
                             ? "rgba(37,99,235,0.25)"
@@ -231,19 +231,19 @@ export default function IndexScreen() {
                             </Avatar.Fallback>
                           </Avatar>
 
-                          <Text fontSize={15} fontWeight="600">
+                          <Text fontSize={15} fontWeight="600" textAlign="center">
                             {interviewer.name}
                           </Text>
 
                           {/* <Text fontSize={12} opacity={0.7}>
-                        {interviewer.description}
-                      </Text>
+                            {interviewer.description}
+                          </Text>
 
-                      {interviewer.focus_areas && (
-                        <Text fontSize={11} opacity={0.6}>
-                          Focus: {interviewer.focus_areas}
-                        </Text>
-                      )} */}
+                          {interviewer.focus_areas && (
+                            <Text fontSize={11} opacity={0.6}>
+                              Focus: {interviewer.focus_areas}
+                            </Text>
+                          )} */}
                         </YStack>
                       </Card>
                     );
