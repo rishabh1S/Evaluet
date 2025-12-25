@@ -10,7 +10,6 @@ from deepgram.extensions.types.sockets import ListenV2SocketClientResponse
 # 100ms of silence @ 16kHz mono int16
 _SILENCE_FRAME = (np.zeros(1600, dtype=np.int16)).tobytes()
 
-
 class DeepgramService:
     def __init__(self, voice_model: str = "aura-2-amalthea-en"):
         # Reads DEEPGRAM_API_KEY / DEEPGRAM_ACCESS_TOKEN from env
@@ -24,7 +23,7 @@ class DeepgramService:
 
         # Silence keepalive
         self._silence_task: Optional[asyncio.Task] = None
-        self._silence_interval: float = 0.4  # seconds between silence frames
+        self._silence_interval: float = 0.7  # seconds between silence frames
 
     # =========================
     #   FLUX STT START/STOP
@@ -171,15 +170,22 @@ class DeepgramService:
         async for token in text_stream:
             current_sentence += token
             if any(p in token for p in [".", "?", "!", "\n"]):
-                audio = await self._tts(current_sentence)
-                if audio:
-                    yield (audio, current_sentence)
+                sentence = current_sentence
                 current_sentence = ""
+                try:
+                    audio = await self._tts(sentence)
+                except Exception:
+                    audio = None
+
+                yield audio, sentence 
 
         if current_sentence.strip():
-            audio = await self._tts(current_sentence)
-            if audio:
-                yield (audio, current_sentence)
+            try:
+                audio = await self._tts(current_sentence)
+            except Exception:
+                audio = None
+
+            yield audio, current_sentence
 
     async def _tts(self, text: str) -> Optional[bytes]:
         """
@@ -192,7 +198,7 @@ class DeepgramService:
                 text=text,
                 model=self.voice_model, 
                 encoding="linear16",
-                container="wav"
+                container="none"
             ):
                 audio_bytes.write(chunk)
 

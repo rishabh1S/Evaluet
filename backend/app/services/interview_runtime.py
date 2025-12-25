@@ -13,9 +13,20 @@ async def audio_loop(
 ):
     try:
         while not shutdown_event.is_set():
-            pcm = await websocket.receive_bytes()
-            if not dg.assistant_speaking:
-                await dg.send_audio(pcm)
+            msg = await websocket.receive()
+
+            if "text" in msg:
+                try:
+                    data = json.loads(msg["text"])
+                    if data.get("type") == "control" and data.get("action") == "END_INTERVIEW":
+                        shutdown_event.set()
+                        break
+                except Exception:
+                    pass
+                continue
+
+            if "bytes" in msg and not dg.assistant_speaking:
+                await dg.send_audio(msg["bytes"])
     except WebSocketDisconnect:
         shutdown_event.set()
     except Exception as e:
@@ -58,12 +69,17 @@ async def conversation_loop(
         dg.assistant_speaking = True
         dg.start_silence_loop()
 
-        async for audio, text in dg.text_to_speech_stream(ai_stream):
-            await websocket.send_bytes(audio)
-            full_reply += text
+        try:
+            async for audio, text in dg.text_to_speech_stream(ai_stream):
+                full_reply += text 
 
-        await dg.stop_silence_loop()
-        dg.assistant_speaking = False
+                if audio:
+                    await websocket.send_bytes(audio)
+        except Exception as e:
+            print("TTS STREAM ERROR:", e)
+        finally:
+            await dg.stop_silence_loop()
+            dg.assistant_speaking = False
 
         await websocket.send_text(json.dumps({
             "type": "transcript",
@@ -96,10 +112,12 @@ async def send_greeting(
     dg.assistant_speaking = True
     dg.start_silence_loop()
 
-    async for audio, _ in dg.text_to_speech_stream(single_text_stream()):
-        await websocket.send_bytes(audio)
-
-    await dg.stop_silence_loop()
-    dg.assistant_speaking = False
+    try:
+        async for audio, _ in dg.text_to_speech_stream(single_text_stream()):
+            if audio: 
+                await websocket.send_bytes(audio)
+    finally:
+        await dg.stop_silence_loop()
+        dg.assistant_speaking = False
 
     history.append({"role": "assistant", "content": greeting})
