@@ -29,14 +29,29 @@ def build_report_prompt(session: InterviewSession, transcript_text: str, evaluat
     ═══════════════════════════════════════════════════════════
     - Return ONLY a valid JSON object.
     - DO NOT escape single quotes (e.g., use "candidate's" NOT "candidate\'s").
-    - ALL newline characters inside the "report_markdown" string MUST be written as literal \n.
-    - Ensure the entire JSON is on a single line if possible, or properly escaped.
+    - Do NOT insert standalone punctuation or filler lines (e.g., ".", "-", or empty bullet points).
+    - Paragraph separation MUST be done using a single "\n\n" only.
+    - Never add content solely to preserve formatting.
     - Use double quotes for JSON keys and string values.
-    - NO explanations outside JSON
+    - NO explanations outside JSON.
+
+    ═══════════════════════════════════════════════════════════
+    REPORT STRUCTURE (MANDATORY):
+    ═══════════════════════════════════════════════════════════
+    - Use ONLY the following sections in this exact order:
+    1. Candidate Summary
+    2. Technical Evaluation
+    3. Strengths (bullet points only)
+    4. Weaknesses (bullet points only)
+    5. Hiring Decision (Strong Hire, Hire, Maybe, No Hire)
+    6. Final Recommendation
+    - Do NOT add extra sections
+    - Do NOT add filler lines
+
 
     JSON STRUCTURE (MANDATORY):
     {{
     "score": <integer from 1 to 10>,
-    "report_markdown": "<complete markdown report>"
+    "report_markdown": "## Candidate Summary\n...\n\n## Technical Evaluation\n...\n\n## Strengths\n- ...\n\n## Weaknesses\n- ...\n\n## Hiring Decision\n...\n\n## Final Recommendation\n..."
     }}
     """
