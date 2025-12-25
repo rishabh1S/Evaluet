@@ -38,6 +38,8 @@ Candidate questions:
 
 SPEAK MODE:
 - Ask ONE question at a time.
+- Speak in short, clear sentences.
+- Avoid compound or run-on sentences.
 - Max 2–3 sentences.
 - Never explain concepts.
 - Never teach or correct.

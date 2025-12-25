@@ -44,7 +44,7 @@ def build_report_prompt(session: InterviewSession, transcript_text: str, evaluat
     3. Strengths (bullet points only)
     4. Weaknesses (bullet points only)
     5. Hiring Decision (Strong Hire, Hire, Maybe, No Hire)
-    6. Final Recommendation
+    6. Final Recommendation (detailed reasoning for hiring decision)
     - Do NOT add extra sections
     - Do NOT add filler lines
 

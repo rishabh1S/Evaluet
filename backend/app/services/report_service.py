@@ -77,8 +77,19 @@ async def generate_and_send_report(session_id: str):
         try: 
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile", 
-                messages=[{"role": "user", "content": report_prompt}],
-                temperature=0.4
+                messages=[{
+                    "role": "system",
+                    "content": (
+                        "You are a JSON generator. "
+                        "You must output STRICT JSON only. "
+                        "No prose, no markdown, no explanations."
+                    )
+                },{
+                    "role": "user",
+                    "content": report_prompt
+                }
+                ],
+                temperature=0.2
             )
             raw_response = completion.choices[0].message.content
         except Exception as e:
