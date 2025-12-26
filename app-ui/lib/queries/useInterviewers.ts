@@ -1,14 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE } from "../env";
 import { authFetch } from "../auth";
-
-export type Interviewer = {
-  id: string;
-  name: string;
-  description?: string;
-  profile_image_url?: string;
-  focus_areas?: string;
-};
+import { Interviewer } from "lib/store/interviewerStore";
 
 async function fetchInterviewers(): Promise<Interviewer[]> {
   const res = await authFetch(

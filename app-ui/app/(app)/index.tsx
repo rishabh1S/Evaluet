@@ -12,6 +12,7 @@ import {
   InterviewerInfoSheet,
   InterviewForm,
 } from "components/landing";
+import { useInterviewerStore } from "lib/store/interviewerStore";
 
 type Interviewer = {
   id: string;
@@ -40,6 +41,7 @@ export default function IndexScreen() {
   const [infoInterviewer, setInfoInterviewer] = useState<Interviewer | null>(
     null
   );
+  const setGlobalInterviewer = useInterviewerStore((s) => s.setInterviewer);
 
   useEffect(() => {
     if (!selectedInterviewer && interviewers.length > 0) {
@@ -59,6 +61,7 @@ export default function IndexScreen() {
       alert("Please fill all fields");
       return;
     }
+    setGlobalInterviewer(selectedInterviewer);
     setLoading(true);
     const form = new FormData();
     form.append("resume", {

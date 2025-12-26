@@ -8,8 +8,8 @@ import {
   Button,
 } from "tamagui";
 import { Info } from "@tamagui/lucide-icons";
-import { Interviewer } from "lib/queries/useInterviewers";
 import { InterviewerSkeleton } from "./InterviewerSkeleton";
+import { Interviewer } from "lib/store/interviewerStore";
 
 type Props = {
   interviewers: Interviewer[];

@@ -15,6 +15,7 @@ import {
 } from "@siteed/expo-audio-studio";
 import MessageBubble, { Message } from "components/MessageBubble";
 import InterviewHeader from "components/InterviewHeader";
+import { useInterviewerStore } from "lib/store/interviewerStore";
 
 /* ---------------- Screen Wrapper ---------------- */
 
@@ -43,6 +44,7 @@ function InterviewScreen() {
   const playLockRef = useRef<Promise<void> | null>(null);
   const assistantSpeakingRef = useRef(false);
   const listRef = useRef<FlatList<Message>>(null);
+  const clearInterviewer = useInterviewerStore((s) => s.clear);
 
   useKeepAwake();
 
@@ -100,6 +102,7 @@ function InterviewScreen() {
         ) {
           interviewEndedRef.current = true;
           setStatus("Interview completed");
+          clearInterviewer();
           stopRecordingSafe();
         }
       }
@@ -270,6 +273,7 @@ function InterviewScreen() {
 
   function endInterview() {
     interviewEndedRef.current = true;
+    clearInterviewer();
     ws.current?.send(
       JSON.stringify({ type: "control", action: "END_INTERVIEW" })
     );
