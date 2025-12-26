@@ -1,29 +1,17 @@
-import {
-  YStack,
-  Button,
-  Input,
-  H2,
-  Text,
-  Card,
-  XStack,
-  TextArea,
-  Avatar,
-  ScrollView,
-} from "tamagui";
+import { YStack, Button, H2, Text, ScrollView, XStack } from "tamagui";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  Upload,
-  Briefcase,
-  TrendingUp,
-  FileText,
-  Play
-} from "@tamagui/lucide-icons";
-import { JobLevelPicker } from "components/JobLevelPicker";
+import { Play } from "@tamagui/lucide-icons";
 import { authFetch } from "lib/auth";
+import { useInterviewers } from "lib/queries/useInterviewers";
+import {
+  InterviewerCarousel,
+  InterviewerInfoSheet,
+  InterviewForm,
+} from "components/landing";
 
 type Interviewer = {
   id: string;
@@ -41,28 +29,23 @@ export default function IndexScreen() {
   );
   const [resume, setResume] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [interviewers, setInterviewers] = useState<Interviewer[]>([]);
   const [selectedInterviewer, setSelectedInterviewer] =
     useState<Interviewer | null>(null);
   const router = useRouter();
+  const {
+    data: interviewers = [],
+    isLoading: interviewersLoading,
+    isError: interviewersError,
+  } = useInterviewers();
+  const [infoInterviewer, setInfoInterviewer] = useState<Interviewer | null>(
+    null
+  );
 
   useEffect(() => {
-    const loadInterviewers = async () => {
-      try {
-        const res = await authFetch(
-          `${API_BASE}/api/interview/all_interviewers`
-        );
-        if (!res.ok) throw new Error("Failed to load interviewers");
-        const data = await res.json();
-        setInterviewers(data);
-        setSelectedInterviewer(data[0] ?? null); // sensible default
-      } catch (err) {
-        console.error("Failed to fetch interviewers", err);
-      }
-    };
-
-    loadInterviewers();
-  }, []);
+    if (!selectedInterviewer && interviewers.length > 0) {
+      setSelectedInterviewer(interviewers[0]);
+    }
+  }, [interviewers, selectedInterviewer]);
 
   const pickResume = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -127,59 +110,16 @@ export default function IndexScreen() {
           </YStack>
 
           {/* Form Card */}
-          <Card
-            elevate
-            bg="rgba(255,255,255,0.05)"
-            bordered
-            borderColor="rgba(255,255,255,0.1)"
-            p="$5"
-            gap="$4"
+          <InterviewForm
+            jobRole={jobRole}
+            setJobRole={setJobRole}
+            jobLevel={jobLevel}
+            setJobLevel={setJobLevel}
+            jobDesc={jobDesc}
+            setJobDesc={setJobDesc}
+            resume={resume}
+            onPickResume={pickResume}
           >
-            {/* Job Role Input */}
-            <YStack gap="$2">
-              <XStack gap="$2" items="center">
-                <Briefcase size={18} color="rgba(255,255,255,0.7)" />
-                <Text
-                  color="rgba(255,255,255,0.9)"
-                  fontSize={14}
-                  fontWeight="600"
-                >
-                  Job Role
-                </Text>
-              </XStack>
-              <Input
-                textContentType="jobTitle"
-                placeholder="e.g. Senior Software Engineer"
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                value={jobRole}
-                onChangeText={setJobRole}
-                bg="rgba(0,0,0,0.3)"
-                borderColor="rgba(255,255,255,0.2)"
-                color="white"
-                height={50}
-                focusStyle={{
-                  borderColor: "#351B98",
-                  bg: "rgba(0,0,0,0.4)",
-                }}
-              />
-            </YStack>
-
-            {/* Job Level Select */}
-            <YStack gap="$2">
-              <XStack gap="$2" items="center">
-                <TrendingUp size={18} color="rgba(255,255,255,0.7)" />
-                <Text
-                  color="rgba(255,255,255,0.9)"
-                  fontSize={14}
-                  fontWeight="600"
-                >
-                  Job Level
-                </Text>
-              </XStack>
-              <JobLevelPicker jobLevel={jobLevel} setJobLevel={setJobLevel} />
-            </YStack>
-
-            {/* Interviewer Selection */}
             <YStack gap="$3">
               <XStack gap="$2" items="center">
                 <Text
@@ -191,119 +131,16 @@ export default function IndexScreen() {
                 </Text>
               </XStack>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                pr="$3"
-              >
-                <XStack gap="$3">
-                  {interviewers.map((interviewer) => {
-                    const isSelected =
-                      selectedInterviewer?.id === interviewer.id;
-
-                    return (
-                      <Card
-                        key={interviewer.id}
-                        onPress={() => setSelectedInterviewer(interviewer)}
-                        p="$3"
-                        bg={
-                          isSelected
-                            ? "rgba(37,99,235,0.25)"
-                            : "rgba(255,255,255,0.05)"
-                        }
-                        borderColor={
-                          isSelected ? "#2563EB" : "rgba(255,255,255,0.15)"
-                        }
-                        borderWidth={1}
-                        pressStyle={{ scale: 0.97 }}
-                      >
-                        <YStack gap="$2">
-                          {/* Avatar */}
-                          <Avatar circular size="$6">
-                            <Avatar.Image
-                              accessibilityLabel="Cam"
-                              src={interviewer.profile_image_url}
-                            />
-                            <Avatar.Fallback backgroundColor="$blue10">
-                              <Text fontWeight="700">
-                                {interviewer.name.charAt(0)}
-                              </Text>
-                            </Avatar.Fallback>
-                          </Avatar>
-
-                          <Text fontSize={15} fontWeight="600" textAlign="center">
-                            {interviewer.name}
-                          </Text>
-
-                          {/* <Text fontSize={12} opacity={0.7}>
-                            {interviewer.description}
-                          </Text>
-
-                          {interviewer.focus_areas && (
-                            <Text fontSize={11} opacity={0.6}>
-                              Focus: {interviewer.focus_areas}
-                            </Text>
-                          )} */}
-                        </YStack>
-                      </Card>
-                    );
-                  })}
-                </XStack>
-              </ScrollView>
-            </YStack>
-
-            {/* Job Description Input */}
-            <YStack gap="$2">
-              <XStack gap="$2" items="center">
-                <FileText size={18} color="rgba(255,255,255,0.7)" />
-                <Text
-                  color="rgba(255,255,255,0.9)"
-                  fontSize={14}
-                  fontWeight="600"
-                >
-                  Job Description
-                </Text>
-              </XStack>
-              <TextArea
-                placeholder="Brief description of the role"
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                size="$4"
-                value={jobDesc}
-                onChangeText={setJobDesc}
-                bg="rgba(0,0,0,0.3)"
-                borderColor="rgba(255,255,255,0.2)"
-                color="white"
-                multiline
-                focusStyle={{
-                  borderColor: "#351B98",
-                  bg: "rgba(0,0,0,0.4)",
-                }}
+              <InterviewerCarousel
+                interviewers={interviewers}
+                selected={selectedInterviewer}
+                onSelect={setSelectedInterviewer}
+                onInfo={setInfoInterviewer}
+                loading={interviewersLoading}
+                error={interviewersError}
               />
             </YStack>
-
-            {/* Resume Upload Button */}
-            <Button
-              onPress={pickResume}
-              bg={resume ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.1)"}
-              borderColor={resume ? "#22c55e" : "rgba(255,255,255,0.2)"}
-              borderWidth={1}
-              height={56}
-              pressStyle={{
-                bg: resume ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.15)",
-              }}
-            >
-              <XStack gap="$3" items="center">
-                <Upload size={20} color={resume ? "#22c55e" : "white"} />
-                <Text
-                  color={resume ? "#22c55e" : "white"}
-                  fontSize={15}
-                  fontWeight="600"
-                >
-                  {resume ? "Resume Selected" : "Upload Resume"}
-                </Text>
-              </XStack>
-            </Button>
-          </Card>
+          </InterviewForm>
 
           {/* Start Button */}
           <Button
@@ -321,6 +158,10 @@ export default function IndexScreen() {
           </Button>
         </YStack>
       </ScrollView>
+      <InterviewerInfoSheet
+        interviewer={infoInterviewer}
+        onClose={() => setInfoInterviewer(null)}
+      />
     </LinearGradient>
   );
 }
