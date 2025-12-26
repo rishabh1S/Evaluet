@@ -9,6 +9,7 @@ import {
 } from "tamagui";
 import { Info } from "@tamagui/lucide-icons";
 import { Interviewer } from "lib/queries/useInterviewers";
+import { InterviewerSkeleton } from "./InterviewerSkeleton";
 
 type Props = {
   interviewers: Interviewer[];
@@ -30,7 +31,10 @@ export function InterviewerCarousel({
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} pr="$3">
       <XStack gap="$3">
-        {loading && <Text opacity={0.7}>Loading interviewers…</Text>}
+        {loading &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <InterviewerSkeleton key={i} />
+          ))}
         {error && <Text color="$red10">Failed to load interviewers</Text>}
         {interviewers.map((interviewer: any) => {
           const isSelected = selected?.id === interviewer.id;
@@ -42,23 +46,20 @@ export function InterviewerCarousel({
               p="$3"
               position="relative"
               bg={
-                isSelected
-                  ? "rgba(37,99,235,0.25)"
-                  : "rgba(255,255,255,0.05)"
+                isSelected ? "rgba(37,99,235,0.25)" : "rgba(255,255,255,0.05)"
               }
-              borderColor={
-                isSelected ? "#2563EB" : "rgba(255,255,255,0.15)"
-              }
+              borderColor={isSelected ? "#2563EB" : "rgba(255,255,255,0.15)"}
               borderWidth={1}
               pressStyle={{ scale: 0.97 }}
             >
               {/* Info Button */}
               <Button
-                size="$2"
+                zIndex={999}
+                size="$2.5"
                 circular
                 position="absolute"
-                top="$0.5"
-                right="$0.5"
+                top="$-1.5"
+                right="$-1.5"
                 chromeless
                 onPress={(e) => {
                   e.stopPropagation();
@@ -74,8 +75,12 @@ export function InterviewerCarousel({
                     accessibilityLabel="Cam"
                     src={interviewer.profile_image_url}
                   />
-                  <Avatar.Fallback backgroundColor="$blue10">
-                    <Text fontWeight="700">{interviewer.name.charAt(0)}</Text>
+                  <Avatar.Fallback
+                    backgroundColor="$black9"
+                    items="center"
+                    justify="center"
+                  >
+                    <Text fontWeight="700" fontSize="$8">{interviewer.name.charAt(0)}</Text>
                   </Avatar.Fallback>
                 </Avatar>
 
