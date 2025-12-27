@@ -27,6 +27,9 @@ class DeepgramService:
         self._silence_task: Optional[asyncio.Task] = None
         self._silence_interval: float = 0.7  # seconds between silence frames
 
+        # TTS timeout
+        self.tts_timeout: float = 10.0
+
     # =========================
     #   FLUX STT START/STOP
     # =========================
@@ -169,27 +172,43 @@ class DeepgramService:
         You already use this in your convo loop.
         """
         current_sentence = ""
+        sentence_buffer = []
+
         async for token in text_stream:
             current_sentence += token
             if any(p in token for p in [".", "?", "!", "\n"]):
-                raw_sentence = current_sentence
+                sentence_buffer.append(current_sentence)
                 current_sentence = ""
-                clean_sentence = sanitize_llm_output(raw_sentence)
-                try:
-                    audio = await self._tts(clean_sentence)
-                except Exception:
-                    audio = None
-
-                yield audio, clean_sentence
+                
+                if sentence_buffer:
+                    raw_sentence = sentence_buffer.pop(0)
+                    clean_sentence = sanitize_llm_output(raw_sentence)
+                    
+                    if clean_sentence.strip():
+                        audio = await self._tts_with_timeout(clean_sentence)
+                        yield audio, clean_sentence
 
         if current_sentence.strip():
             clean_sentence = sanitize_llm_output(current_sentence)
-            try:
-                audio = await self._tts(clean_sentence)
-            except Exception:
-                audio = None
-
+            audio = await self._tts_with_timeout(clean_sentence)
             yield audio, clean_sentence
+
+    async def _tts_with_timeout(self, text: str) -> Optional[bytes]:
+        """
+        Wrap TTS call with timeout. Returns None if it fails or times out.
+        """
+        try:
+            return await asyncio.wait_for(
+                self._tts(text),
+                timeout=self.tts_timeout
+            )
+        except asyncio.TimeoutError:
+            print(f"[TTS] Timeout after {self.tts_timeout}s for: '{text[:50]}...'")
+            return None
+        except Exception as e:
+            print(f"[TTS] Error: {e}")
+            return None
+
 
     async def _tts(self, text: str) -> Optional[bytes]:
         """

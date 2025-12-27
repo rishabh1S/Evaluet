@@ -20,6 +20,7 @@ async def get_ai_response_stream(history: list) -> AsyncGenerator[str, None]:
 
         for chunk in completion:
             if chunk.choices[0].delta.content:
+                print(f'Groq chunk: "{chunk.choices[0].delta.content}"')
                 yield chunk.choices[0].delta.content
 
     except Exception as e:
