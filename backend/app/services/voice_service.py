@@ -7,6 +7,8 @@ from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
 from deepgram.extensions.types.sockets import ListenV2SocketClientResponse
 
+from app.core.llm_sanitizer import sanitize_llm_output
+
 # 100ms of silence @ 16kHz mono int16
 _SILENCE_FRAME = (np.zeros(1600, dtype=np.int16)).tobytes()
 
@@ -170,22 +172,24 @@ class DeepgramService:
         async for token in text_stream:
             current_sentence += token
             if any(p in token for p in [".", "?", "!", "\n"]):
-                sentence = current_sentence
+                raw_sentence = current_sentence
                 current_sentence = ""
+                clean_sentence = sanitize_llm_output(raw_sentence)
                 try:
-                    audio = await self._tts(sentence)
+                    audio = await self._tts(clean_sentence)
                 except Exception:
                     audio = None
 
-                yield audio, sentence 
+                yield audio, clean_sentence
 
         if current_sentence.strip():
+            clean_sentence = sanitize_llm_output(current_sentence)
             try:
-                audio = await self._tts(current_sentence)
+                audio = await self._tts(clean_sentence)
             except Exception:
                 audio = None
 
-            yield audio, current_sentence
+            yield audio, clean_sentence
 
     async def _tts(self, text: str) -> Optional[bytes]:
         """

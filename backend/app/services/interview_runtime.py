@@ -70,8 +70,9 @@ async def conversation_loop(
         dg.start_silence_loop()
 
         try:
-            async for audio, text in dg.text_to_speech_stream(ai_stream):
-                full_reply += text 
+            async for audio, clean_text in dg.text_to_speech_stream(ai_stream):
+                if clean_text:
+                    full_reply += clean_text + " "
 
                 if audio:
                     await websocket.send_bytes(audio)
@@ -81,14 +82,21 @@ async def conversation_loop(
             await dg.stop_silence_loop()
             dg.assistant_speaking = False
 
-        await websocket.send_text(json.dumps({
-            "type": "transcript",
-            "role": "assistant",
-            "content": full_reply
-        }))
-        history.append({"role": "assistant", "content": full_reply})
+        full_reply = full_reply.strip()
+
+        if full_reply:
+            await websocket.send_text(json.dumps({
+                "type": "transcript",
+                "role": "assistant",
+                "content": full_reply
+            }))
+            history.append({"role": "assistant", "content": full_reply})
 
         if "[END_INTERVIEW]" in full_reply:
+            await websocket.send_text(json.dumps({
+                "type": "control",
+                "action": "END_INTERVIEW"
+            }))
             state.over = True
             shutdown_event.set()
             break
