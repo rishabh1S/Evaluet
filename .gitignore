@@ -40,3 +40,9 @@ secrets/
 
 # System prompts
 test.py
+
+#Database queries
+db/
+
+# Image - Video assets
+assets/

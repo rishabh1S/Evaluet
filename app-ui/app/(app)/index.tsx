@@ -1,35 +1,53 @@
-import {
-  YStack,
-  Button,
-  Input,
-  H2,
-  Text,
-  Card,
-  XStack,
-  TextArea,
-} from "tamagui";
+import { YStack, Button, H2, Text, ScrollView, XStack } from "tamagui";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  Upload,
-  Briefcase,
-  TrendingUp,
-  FileText,
-  Play,
-} from "@tamagui/lucide-icons";
-import { JobLevelPicker } from "components/JobLevelPicker";
+import { Play } from "@tamagui/lucide-icons";
 import { authFetch } from "lib/auth";
+import { useInterviewers } from "lib/queries/useInterviewers";
+import {
+  InterviewerCarousel,
+  InterviewerInfoSheet,
+  InterviewForm,
+} from "components/landing";
+import { useInterviewerStore } from "lib/store/interviewerStore";
+
+type Interviewer = {
+  id: string;
+  name: string;
+  description?: string;
+  profile_image_url?: string;
+  focus_areas?: string;
+};
 
 export default function IndexScreen() {
   const [jobRole, setJobRole] = useState("Software Engineer");
   const [jobLevel, setJobLevel] = useState("Mid-Level");
-  const [jobDesc, setJobDesc] = useState("Must know Java, Springboot, Microservices.");
+  const [jobDesc, setJobDesc] = useState(
+    "Must know Java, Springboot, Microservices."
+  );
   const [resume, setResume] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedInterviewer, setSelectedInterviewer] =
+    useState<Interviewer | null>(null);
   const router = useRouter();
+  const {
+    data: interviewers = [],
+    isLoading: interviewersLoading,
+    isError: interviewersError,
+  } = useInterviewers();
+  const [infoInterviewer, setInfoInterviewer] = useState<Interviewer | null>(
+    null
+  );
+  const setGlobalInterviewer = useInterviewerStore((s) => s.setInterviewer);
+
+  useEffect(() => {
+    if (!selectedInterviewer && interviewers.length > 0) {
+      setSelectedInterviewer(interviewers[0]);
+    }
+  }, [interviewers, selectedInterviewer]);
 
   const pickResume = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -39,10 +57,11 @@ export default function IndexScreen() {
   };
 
   const startInterview = async () => {
-    if (!jobRole || !jobLevel || !jobDesc || !resume) {
+    if (!jobRole || !jobLevel || !jobDesc || !resume || !selectedInterviewer) {
       alert("Please fill all fields");
       return;
     }
+    setGlobalInterviewer(selectedInterviewer);
     setLoading(true);
     const form = new FormData();
     form.append("resume", {
@@ -53,6 +72,7 @@ export default function IndexScreen() {
     form.append("job_role", jobRole);
     form.append("job_level", jobLevel);
     form.append("job_desc", jobDesc);
+    form.append("interviewer_id", selectedInterviewer.id);
 
     try {
       const res = await authFetch(`${API_BASE}/api/interview/init`, {
@@ -66,10 +86,10 @@ export default function IndexScreen() {
       const data = await res.json();
       router.navigate(`/interview/${data.session_id}` as any);
     } catch (err: any) {
-      console.error('Init interview failed:', err)
-      alert(err.message ?? 'Network error')
+      console.error("Init interview failed:", err);
+      alert(err.message ?? "Network error");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   };
 
@@ -78,138 +98,73 @@ export default function IndexScreen() {
       colors={["#0B1220", "#0F172A", "#111827"]}
       style={{ flex: 1 }}
     >
-      <YStack flex={1} justify="center" px="$6" py="$8" gap="$5">
-        {/* Header */}
-        <YStack gap="$2" items="center" mb="$4">
-          <H2 text="center" fontWeight="500">
-            AI Interview Setup
-          </H2>
-          <Text text="center">
-            Prepare for your next opportunity
-          </Text>
-        </YStack>
-
-        {/* Form Card */}
-        <Card
-          elevate
-          bg="rgba(255,255,255,0.05)"
-          bordered
-          borderColor="rgba(255,255,255,0.1)"
-          p="$5"
-          gap="$4"
-        >
-          {/* Job Role Input */}
-          <YStack gap="$2">
-            <XStack gap="$2" items="center">
-              <Briefcase size={18} color="rgba(255,255,255,0.7)" />
-              <Text
-                color="rgba(255,255,255,0.9)"
-                fontSize={14}
-                fontWeight="600"
-              >
-                Job Role
-              </Text>
-            </XStack>
-            <Input
-              textContentType="jobTitle"
-              placeholder="e.g. Senior Software Engineer"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={jobRole}
-              onChangeText={setJobRole}
-              bg="rgba(0,0,0,0.3)"
-              borderColor="rgba(255,255,255,0.2)"
-              color="white"
-              height={50}
-              focusStyle={{
-                borderColor: "#351B98",
-                bg: "rgba(0,0,0,0.4)",
-              }}
-            />
+      <ScrollView
+        flex={1}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <YStack justify="center" px="$6" py="$8" gap="$5">
+          {/* Header */}
+          <YStack gap="$2" items="center">
+            <H2 text="center" fontWeight="500">
+              AI Interview Setup
+            </H2>
+            <Text text="center">Prepare for your next opportunity</Text>
           </YStack>
 
-          {/* Job Level Select */}
-          <YStack gap="$2">
-            <XStack gap="$2" items="center">
-              <TrendingUp size={18} color="rgba(255,255,255,0.7)" />
-              <Text
-                color="rgba(255,255,255,0.9)"
-                fontSize={14}
-                fontWeight="600"
-              >
-                Job Level
-              </Text>
-            </XStack>
-            <JobLevelPicker jobLevel={jobLevel} setJobLevel={setJobLevel} />
-          </YStack>
-
-          {/* Job Description Input */}
-          <YStack gap="$2">
-            <XStack gap="$2" items="center">
-              <FileText size={18} color="rgba(255,255,255,0.7)" />
-              <Text
-                color="rgba(255,255,255,0.9)"
-                fontSize={14}
-                fontWeight="600"
-              >
-                Job Description
-              </Text>
-            </XStack>
-            <TextArea
-              placeholder="Brief description of the role"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              size="$4"
-              value={jobDesc}
-              onChangeText={setJobDesc}
-              bg="rgba(0,0,0,0.3)"
-              borderColor="rgba(255,255,255,0.2)"
-              color="white"
-              multiline
-              focusStyle={{
-                borderColor: "#351B98",
-                bg: "rgba(0,0,0,0.4)",
-              }}
-            />
-          </YStack>
-
-          {/* Resume Upload Button */}
-          <Button
-            onPress={pickResume}
-            bg={resume ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.1)"}
-            borderColor={resume ? "#22c55e" : "rgba(255,255,255,0.2)"}
-            borderWidth={1}
-            height={56}
-            pressStyle={{
-              bg: resume ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.15)",
-            }}
+          {/* Form Card */}
+          <InterviewForm
+            jobRole={jobRole}
+            setJobRole={setJobRole}
+            jobLevel={jobLevel}
+            setJobLevel={setJobLevel}
+            jobDesc={jobDesc}
+            setJobDesc={setJobDesc}
+            resume={resume}
+            onPickResume={pickResume}
           >
-            <XStack gap="$3" items="center">
-              <Upload size={20} color={resume ? "#22c55e" : "white"} />
-              <Text
-                color={resume ? "#22c55e" : "white"}
-                fontSize={15}
-                fontWeight="600"
-              >
-                {resume ? "Resume Selected" : "Upload Resume"}
-              </Text>
-            </XStack>
-          </Button>
-        </Card>
+            <YStack gap="$3">
+              <XStack gap="$2" items="center">
+                <Text
+                  color="rgba(255,255,255,0.9)"
+                  fontSize={14}
+                  fontWeight="600"
+                >
+                  Choose Interviewer
+                </Text>
+              </XStack>
 
-        {/* Start Button */}
-        <Button
-          onPress={startInterview}
-          iconAfter={<Play size={22} color="white" fill="white" />}
-          height={58}
-          disabled={loading}
-          opacity={loading ? 0.7 : 1}
-          bg="#2563EB"
-          pressStyle={{ bg: "#1D4ED8", scale: 0.98, }}
-        >
+              <InterviewerCarousel
+                interviewers={interviewers}
+                selected={selectedInterviewer}
+                onSelect={setSelectedInterviewer}
+                onInfo={setInfoInterviewer}
+                loading={interviewersLoading}
+                error={interviewersError}
+              />
+            </YStack>
+          </InterviewForm>
+
+          {/* Start Button */}
+          <Button
+            onPress={startInterview}
+            iconAfter={<Play size={22} color="white" fill="white" />}
+            height={58}
+            disabled={loading}
+            opacity={loading ? 0.7 : 1}
+            bg="#2563EB"
+            pressStyle={{ bg: "#1D4ED8", scale: 0.98 }}
+          >
             <Text color="white" fontSize={17} fontWeight="700">
               {loading ? "Starting..." : "Start Interview"}
             </Text>
-        </Button>
-      </YStack>
+          </Button>
+        </YStack>
+      </ScrollView>
+      <InterviewerInfoSheet
+        interviewer={infoInterviewer}
+        onClose={() => setInfoInterviewer(null)}
+      />
     </LinearGradient>
   );
 }

@@ -15,6 +15,7 @@ import {
 } from "@siteed/expo-audio-studio";
 import MessageBubble, { Message } from "components/MessageBubble";
 import InterviewHeader from "components/InterviewHeader";
+import { useInterviewerStore } from "lib/store/interviewerStore";
 
 /* ---------------- Screen Wrapper ---------------- */
 
@@ -41,8 +42,9 @@ function InterviewScreen() {
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
   const playLockRef = useRef<Promise<void> | null>(null);
-  const assistantSpeakingRef = useRef(false)
+  const assistantSpeakingRef = useRef(false);
   const listRef = useRef<FlatList<Message>>(null);
+  const clearInterviewer = useInterviewerStore((s) => s.clear);
 
   useKeepAwake();
 
@@ -92,19 +94,13 @@ function InterviewScreen() {
             },
           ]);
         }
-        if (
-          msg.role === "assistant" &&
-          typeof msg.content === "string" &&
-          msg.content.includes("[END_INTERVIEW]") &&
-          !interviewEndedRef.current
-        ) {
+        if (msg.type === "control" && msg.action === "END_INTERVIEW") {
           interviewEndedRef.current = true;
           setStatus("Interview completed");
+          clearInterviewer();
+          stopRecordingSafe();
           setIsRecording(false);
-
-          setTimeout(() => {
-            router.replace("/");
-          }, 5000);
+          return;
         }
       }
       if (!interviewEndedRef.current && e.data instanceof ArrayBuffer) {
@@ -113,7 +109,11 @@ function InterviewScreen() {
     };
 
     ws.current.onerror = () => setStatus("Connection error");
-    ws.current.onclose = () => setStatus("Disconnected");
+    ws.current.onclose = () => {
+      if (!interviewEndedRef.current) {
+        setStatus("Disconnected");
+      }
+    };
 
     return () => {
       ws.current?.close();
@@ -137,7 +137,13 @@ function InterviewScreen() {
       encoding: "pcm_16bit",
       interval: 100,
       onAudioStream: async (event) => {
-        if (!ws.current || interviewEndedRef.current) return;
+        if (
+          !ws.current ||
+          interviewEndedRef.current ||
+          assistantSpeakingRef.current
+        ) {
+          return;
+        }
 
         const base64 = event.data as string;
         const binary = atob(base64);
@@ -205,12 +211,22 @@ function InterviewScreen() {
       assistantSpeakingRef.current = true;
       await stopRecordingSafe();
 
-      const base64 = Buffer.from(pcmData).toString("base64");
+      const wavData = pcmToWav(pcmData);
+      const base64 = Buffer.from(wavData).toString("base64");
       const sound = new Audio.Sound();
       currentSound.current = sound;
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
+          assistantSpeakingRef.current = false;
+
+          if (!interviewEndedRef.current) {
+            setTimeout(() => {
+              startRecordingSafe().catch(() => {
+                /* ignore */
+              });
+            }, 120);
+          }
           resolve();
         }
       });
@@ -226,15 +242,58 @@ function InterviewScreen() {
     }
   }
 
+  function pcmToWav(pcmData: Uint8Array) {
+    const sampleRate = 24000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+
+    const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+    const blockAlign = (numChannels * bitsPerSample) / 8;
+    const buffer = new ArrayBuffer(44 + pcmData.length);
+    const view = new DataView(buffer);
+
+    let offset = 0;
+
+    function writeString(s: string) {
+      for (let i = 0; i < s.length; i++) {
+        view.setUint8(offset++, s.charCodeAt(i));
+      }
+    }
+
+    writeString("RIFF");
+    view.setUint32(offset, 36 + pcmData.length, true);
+    offset += 4;
+    writeString("WAVE");
+    writeString("fmt ");
+    view.setUint32(offset, 16, true);
+    offset += 4;
+    view.setUint16(offset, 1, true);
+    offset += 2;
+    view.setUint16(offset, numChannels, true);
+    offset += 2;
+    view.setUint32(offset, sampleRate, true);
+    offset += 4;
+    view.setUint32(offset, byteRate, true);
+    offset += 4;
+    view.setUint16(offset, blockAlign, true);
+    offset += 2;
+    view.setUint16(offset, bitsPerSample, true);
+    offset += 2;
+    writeString("data");
+    view.setUint32(offset, pcmData.length, true);
+    offset += 4;
+
+    new Uint8Array(buffer, 44).set(pcmData);
+    return new Uint8Array(buffer);
+  }
+
   function endInterview() {
     interviewEndedRef.current = true;
+    clearInterviewer();
     ws.current?.send(
-      JSON.stringify({ type: "CONTROL", action: "END_INTERVIEW" })
+      JSON.stringify({ type: "control", action: "END_INTERVIEW" })
     );
     ws.current?.close();
-    setTimeout(() => {
-      router.replace("/");
-    }, 5000);
   }
 
   return (

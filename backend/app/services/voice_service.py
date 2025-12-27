@@ -7,12 +7,13 @@ from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
 from deepgram.extensions.types.sockets import ListenV2SocketClientResponse
 
+from app.core.llm_sanitizer import sanitize_llm_output
+
 # 100ms of silence @ 16kHz mono int16
 _SILENCE_FRAME = (np.zeros(1600, dtype=np.int16)).tobytes()
 
-
 class DeepgramService:
-    def __init__(self):
+    def __init__(self, voice_model: str = "aura-2-amalthea-en"):
         # Reads DEEPGRAM_API_KEY / DEEPGRAM_ACCESS_TOKEN from env
         self.client = AsyncDeepgramClient()
         self._listen_cm = None          # context manager for listen.v2
@@ -20,10 +21,14 @@ class DeepgramService:
 
         self.transcript_queue: asyncio.Queue[str] = asyncio.Queue()
         self.assistant_speaking: bool = False
+        self.voice_model = voice_model
 
         # Silence keepalive
         self._silence_task: Optional[asyncio.Task] = None
-        self._silence_interval: float = 0.4  # seconds between silence frames
+        self._silence_interval: float = 0.7  # seconds between silence frames
+
+        # TTS timeout
+        self.tts_timeout: float = 10.0
 
     # =========================
     #   FLUX STT START/STOP
@@ -167,18 +172,43 @@ class DeepgramService:
         You already use this in your convo loop.
         """
         current_sentence = ""
+        sentence_buffer = []
+
         async for token in text_stream:
             current_sentence += token
             if any(p in token for p in [".", "?", "!", "\n"]):
-                audio = await self._tts(current_sentence)
-                if audio:
-                    yield (audio, current_sentence)
+                sentence_buffer.append(current_sentence)
                 current_sentence = ""
+                
+                if sentence_buffer:
+                    raw_sentence = sentence_buffer.pop(0)
+                    clean_sentence = sanitize_llm_output(raw_sentence)
+                    
+                    if clean_sentence.strip():
+                        audio = await self._tts_with_timeout(clean_sentence)
+                        yield audio, clean_sentence
 
         if current_sentence.strip():
-            audio = await self._tts(current_sentence)
-            if audio:
-                yield (audio, current_sentence)
+            clean_sentence = sanitize_llm_output(current_sentence)
+            audio = await self._tts_with_timeout(clean_sentence)
+            yield audio, clean_sentence
+
+    async def _tts_with_timeout(self, text: str) -> Optional[bytes]:
+        """
+        Wrap TTS call with timeout. Returns None if it fails or times out.
+        """
+        try:
+            return await asyncio.wait_for(
+                self._tts(text),
+                timeout=self.tts_timeout
+            )
+        except asyncio.TimeoutError:
+            print(f"[TTS] Timeout after {self.tts_timeout}s for: '{text[:50]}...'")
+            return None
+        except Exception as e:
+            print(f"[TTS] Error: {e}")
+            return None
+
 
     async def _tts(self, text: str) -> Optional[bytes]:
         """
@@ -189,9 +219,9 @@ class DeepgramService:
 
             async for chunk in self.client.speak.v1.audio.generate(
                 text=text,
-                model="aura-2-amalthea-en",  # or whatever Aura-2 voice you prefer
+                model=self.voice_model, 
                 encoding="linear16",
-                container="wav"
+                container="none"
             ):
                 audio_bytes.write(chunk)
 

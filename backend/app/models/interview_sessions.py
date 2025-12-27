@@ -12,19 +12,24 @@ class InterviewSession(Base):
     
     # User Details
     user_id = Column(String, ForeignKey("users.user_id"), index=True)
+
+    # Interviewer Character
+    interviewer_id = Column(String, ForeignKey("interviewer_characters.id"))
     
     # Job Details
     job_role = Column(String)
     job_description = Column(Text)
     candidate_level = Column(String)
+
+    # Voice Model
+    voice_model = Column(String, nullable=True)
     
     # Context
     system_prompt = Column(Text) # The "Brain" context
     
     # Stores the full conversation [{"role": "user", "content": "..."}, ...]
     transcript = Column(JSON, nullable=True) 
-    
-    # Status: 'ACTIVE', 'COMPLETED', 'PENDING_REPORT'
+
     status = Column(
         SQLEnum(SessionStatus, name="session_status_enum"),
         default=SessionStatus.ACTIVE,

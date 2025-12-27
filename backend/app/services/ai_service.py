@@ -11,15 +11,16 @@ async def get_ai_response_stream(history: list) -> AsyncGenerator[str, None]:
     """
     try:
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant", # Fastest latency model
+            model="llama-3.1-8b-instant", 
             messages=history,
-            temperature=0.6,
+            temperature=0.5,
             max_tokens=120,
-            stream=True # <--- CRITICAL: Enables Token Streaming
+            stream=True 
         )
 
         for chunk in completion:
             if chunk.choices[0].delta.content:
+                print(f'Groq chunk: "{chunk.choices[0].delta.content}"')
                 yield chunk.choices[0].delta.content
 
     except Exception as e:

@@ -13,9 +13,20 @@ async def audio_loop(
 ):
     try:
         while not shutdown_event.is_set():
-            pcm = await websocket.receive_bytes()
-            if not dg.assistant_speaking:
-                await dg.send_audio(pcm)
+            msg = await websocket.receive()
+
+            if "text" in msg:
+                try:
+                    data = json.loads(msg["text"])
+                    if data.get("type") == "control" and data.get("action") == "END_INTERVIEW":
+                        shutdown_event.set()
+                        break
+                except Exception:
+                    pass
+                continue
+
+            if "bytes" in msg and not dg.assistant_speaking:
+                await dg.send_audio(msg["bytes"])
     except WebSocketDisconnect:
         shutdown_event.set()
     except Exception as e:
@@ -38,44 +49,97 @@ async def conversation_loop(
             )
         except asyncio.TimeoutError:
             if state.expired():
-                shutdown_event.set()
+                await handle_timeout(
+                    websocket, dg, history, state, shutdown_event
+                )
                 break
             continue
 
         if len(user_text.strip().split()) < 2:
             continue
 
-        await websocket.send_text(json.dumps({
-            "type": "transcript",
-            "role": "user",
-            "content": user_text
-        }))
-        history.append({"role": "user", "content": user_text})
+        await send_transcript(websocket, "user", user_text, history)
 
         ai_stream = get_ai_response_stream(history)
-        full_reply = ""
+        full_reply = await stream_llm_response(websocket, dg, ai_stream)
 
-        dg.assistant_speaking = True
-        dg.start_silence_loop()
+        if full_reply:
+            await send_transcript(websocket, "assistant", full_reply, history)
 
-        async for audio, text in dg.text_to_speech_stream(ai_stream):
-            await websocket.send_bytes(audio)
-            full_reply += text
+        if "[END_INTERVIEW]" in full_reply:
+            await end_interview(websocket, state, shutdown_event)
+            break
 
+
+async def send_transcript(
+    websocket: WebSocket,
+    role: str,
+    content: str,
+    history: list,
+):
+    await websocket.send_text(json.dumps({
+        "type": "transcript",
+        "role": role,
+        "content": content
+    }))
+    history.append({"role": role, "content": content})
+
+
+async def stream_llm_response(
+    websocket: WebSocket,
+    dg: DeepgramService,
+    ai_stream,
+) -> str:
+    full_reply = ""
+
+    dg.assistant_speaking = True
+    dg.start_silence_loop()
+
+    try:
+        async for audio, clean_text in dg.text_to_speech_stream(ai_stream):
+            if clean_text:
+                full_reply += clean_text + " "
+            if audio:
+                await websocket.send_bytes(audio)
+    finally:
         await dg.stop_silence_loop()
         dg.assistant_speaking = False
 
-        await websocket.send_text(json.dumps({
-            "type": "transcript",
-            "role": "assistant",
-            "content": full_reply
-        }))
-        history.append({"role": "assistant", "content": full_reply})
+    return full_reply.strip()
 
-        if "[END_INTERVIEW]" in full_reply:
-            state.over = True
-            shutdown_event.set()
-            break
+async def end_interview(
+    websocket: WebSocket,
+    state: InterviewStateManager,
+    shutdown_event: asyncio.Event,
+):
+    await websocket.send_text(json.dumps({
+        "type": "control",
+        "action": "END_INTERVIEW"
+    }))
+    state.over = True
+    shutdown_event.set()
+
+
+async def handle_timeout(
+    websocket: WebSocket,
+    dg: DeepgramService,
+    history: list,
+    state: InterviewStateManager,
+    shutdown_event: asyncio.Event,
+):
+    history.append({
+        "role": "system",
+        "content": "SYSTEM: Time is up"
+    })
+
+    ai_stream = get_ai_response_stream(history)
+    final_reply = await stream_llm_response(websocket, dg, ai_stream)
+
+    if final_reply:
+        await send_transcript(websocket, "assistant", final_reply, history)
+
+    await end_interview(websocket, state, shutdown_event)
+
 
 
 async def send_greeting(
@@ -96,10 +160,12 @@ async def send_greeting(
     dg.assistant_speaking = True
     dg.start_silence_loop()
 
-    async for audio, _ in dg.text_to_speech_stream(single_text_stream()):
-        await websocket.send_bytes(audio)
-
-    await dg.stop_silence_loop()
-    dg.assistant_speaking = False
+    try:
+        async for audio, _ in dg.text_to_speech_stream(single_text_stream()):
+            if audio: 
+                await websocket.send_bytes(audio)
+    finally:
+        await dg.stop_silence_loop()
+        dg.assistant_speaking = False
 
     history.append({"role": "assistant", "content": greeting})
