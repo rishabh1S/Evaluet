@@ -94,16 +94,13 @@ function InterviewScreen() {
             },
           ]);
         }
-        if (
-          msg.role === "assistant" &&
-          typeof msg.content === "string" &&
-          msg.content.includes("[END_INTERVIEW]") &&
-          !interviewEndedRef.current
-        ) {
+        if (msg.type === "control" && msg.action === "END_INTERVIEW") {
           interviewEndedRef.current = true;
           setStatus("Interview completed");
           clearInterviewer();
           stopRecordingSafe();
+          setIsRecording(false);
+          return;
         }
       }
       if (!interviewEndedRef.current && e.data instanceof ArrayBuffer) {
@@ -112,7 +109,11 @@ function InterviewScreen() {
     };
 
     ws.current.onerror = () => setStatus("Connection error");
-    ws.current.onclose = () => setStatus("Disconnected");
+    ws.current.onclose = () => {
+      if (!interviewEndedRef.current) {
+        setStatus("Disconnected");
+      }
+    };
 
     return () => {
       ws.current?.close();
@@ -136,7 +137,13 @@ function InterviewScreen() {
       encoding: "pcm_16bit",
       interval: 100,
       onAudioStream: async (event) => {
-        if (!ws.current || interviewEndedRef.current) return;
+        if (
+          !ws.current ||
+          interviewEndedRef.current ||
+          assistantSpeakingRef.current
+        ) {
+          return;
+        }
 
         const base64 = event.data as string;
         const binary = atob(base64);
@@ -208,9 +215,18 @@ function InterviewScreen() {
       const base64 = Buffer.from(wavData).toString("base64");
       const sound = new Audio.Sound();
       currentSound.current = sound;
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
+          assistantSpeakingRef.current = false;
+
+          if (!interviewEndedRef.current) {
+            setTimeout(() => {
+              startRecordingSafe().catch(() => {
+                /* ignore */
+              });
+            }, 120);
+          }
           resolve();
         }
       });
