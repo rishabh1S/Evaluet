@@ -1,21 +1,22 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { YStack, Button, Text } from "tamagui";
+import { useLocalSearchParams } from "expo-router";
+import { YStack } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FlatList } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../../lib/env";
-import * as Crypto from "expo-crypto";
-import { Mic } from "@tamagui/lucide-icons";
-import { Audio } from "expo-av";
+import { Audio, Video, ResizeMode } from "expo-av";
 import {
   AudioRecorderProvider,
   useSharedAudioRecorder,
 } from "@siteed/expo-audio-studio";
-import MessageBubble, { Message } from "components/MessageBubble";
-import InterviewHeader from "components/InterviewHeader";
 import { useInterviewerStore } from "lib/store/interviewerStore";
+import { BottomControls, TopBar, VoiceTranscript } from "components/interview";
+
+type SubtitleLine = {
+  id: string;
+  text: string;
+};
 
 /* ---------------- Screen Wrapper ---------------- */
 
@@ -30,21 +31,22 @@ export default function InterviewScreenWrapper() {
 /* ---------------- Main Screen ---------------- */
 
 function InterviewScreen() {
-  const router = useRouter();
+  const [transcript, setTranscript] = useState("");
+  const [speakerOn, setSpeakerOn] = useState(true);
   const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState("Connecting…");
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const micStartedRef = useRef(false);
+  const videoRef = useRef<Video | null>(null);
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
   const playLockRef = useRef<Promise<void> | null>(null);
   const assistantSpeakingRef = useRef(false);
-  const listRef = useRef<FlatList<Message>>(null);
   const clearInterviewer = useInterviewerStore((s) => s.clear);
+  const interviewerIdleVideo = require("../../../assets/videos/idle_1.mp4");
 
   useKeepAwake();
 
@@ -59,6 +61,12 @@ function InterviewScreen() {
 
     return () => clearInterval(t);
   }, [isRecording]);
+
+  useEffect(() => {
+    return () => {
+      videoRef.current?.stopAsync().catch(() => {});
+    };
+  }, []);
 
   const timeLabel = `${Math.floor(seconds / 60)
     .toString()
@@ -84,16 +92,13 @@ function InterviewScreen() {
     ws.current.onmessage = async (e) => {
       if (typeof e.data === "string") {
         const msg = JSON.parse(e.data);
-        if (msg.type === "transcript") {
-          setMessages((m) => [
-            ...m,
-            {
-              id: Crypto.randomUUID(),
-              text: msg.content,
-              role: msg.role,
-            },
-          ]);
+
+        if (msg.type === "transcript" && msg.role === "assistant") {
+          setTranscript((prev) =>
+            prev ? `${prev}\n${msg.content}` : msg.content
+          );
         }
+
         if (msg.type === "control" && msg.action === "END_INTERVIEW") {
           interviewEndedRef.current = true;
           setStatus("Interview completed");
@@ -103,6 +108,7 @@ function InterviewScreen() {
           return;
         }
       }
+
       if (!interviewEndedRef.current && e.data instanceof ArrayBuffer) {
         enqueueAudio(e.data);
       }
@@ -145,12 +151,7 @@ function InterviewScreen() {
           return;
         }
 
-        const base64 = event.data as string;
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
+        const bytes = Buffer.from(event.data as string, "base64");
         ws.current.send(bytes);
       },
     });
@@ -208,6 +209,12 @@ function InterviewScreen() {
     resolve: () => void
   ) {
     try {
+      if (!speakerOn) {
+        assistantSpeakingRef.current = false;
+        resolve();
+        return;
+      }
+
       assistantSpeakingRef.current = true;
       await stopRecordingSafe();
 
@@ -215,18 +222,16 @@ function InterviewScreen() {
       const base64 = Buffer.from(wavData).toString("base64");
       const sound = new Audio.Sound();
       currentSound.current = sound;
+
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
           assistantSpeakingRef.current = false;
 
           if (!interviewEndedRef.current) {
-            setTimeout(() => {
-              startRecordingSafe().catch(() => {
-                /* ignore */
-              });
-            }, 120);
+            setTimeout(() => startRecordingSafe().catch(() => {}), 120);
           }
+
           resolve();
         }
       });
@@ -297,55 +302,66 @@ function InterviewScreen() {
   }
 
   return (
-    <LinearGradient colors={["#0f172a", "#1e293b"]} style={{ flex: 1 }}>
+    <LinearGradient
+      colors={["#020617", "#0b1220", "#111827"]}
+      style={{ flex: 1 }}
+    >
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        <InterviewHeader
-          timeLabel={timeLabel}
-          status={status}
-          onEnd={endInterview}
-        />
+        <YStack flex={1}>
+          {/* Header - 10% */}
+          <YStack height="10%" justify="center">
+            <TopBar timeLabel={timeLabel} status={status} />
+          </YStack>
 
-        <YStack flex={1} p="$4" gap="$4">
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <MessageBubble message={item} />}
-            contentContainerStyle={{ paddingVertical: 8 }}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => {
-              listRef.current?.scrollToEnd({ animated: true });
-            }}
-          />
+          {/* Video - 63% */}
+          <YStack height="65%" justify="center" alignItems="center" px="$2.5">
+            <YStack
+              width="100%"
+              height="100%"
+              maxWidth={420}
+              bg="#020617"
+              borderColor="rgba(255,255,255,0.06)"
+              borderWidth={1}
+              borderRadius="$8"
+              overflow="hidden"
+              shadowColor="black"
+              shadowOpacity={0.55}
+              shadowRadius={28}
+              elevation={12}
+            >
+              <Video
+                ref={videoRef}
+                source={interviewerIdleVideo}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted
+                progressUpdateIntervalMillis={500}
+                useNativeControls={false}
+                rate={1}
+                volume={20}
+                onError={(e) => console.warn("Video error:", e)}
+              />
+            </YStack>
+          </YStack>
 
-          {/* Single Mic Button */}
-          <YStack items="center" justify="center" pb="$2" pt="$-1">
-            <Button
-              onPress={() =>
+          {/* Voice Transcript - 15% */}
+          <YStack height="13%" px="$4" justify="center" zIndex={999}>
+            <VoiceTranscript text={transcript} />
+          </YStack>
+
+          {/* Bottom Controls - 12% */}
+          <YStack height="12%" justify="center">
+            <BottomControls
+              isRecording={isRecording}
+              onMicToggle={() =>
                 isRecording ? stopRecordingSafe() : startRecordingSafe()
               }
-              circular
-              size="$8"
-              bg={isRecording ? "rgba(241,102,99,0.2)" : "rgba(99,102,241,0.2)"}
-              borderColor={isRecording ? "#ef4444" : "#818cf8"}
-              borderWidth={3}
-              pressStyle={{ scale: 0.92 }}
-              animation="bouncy"
-              style={{
-                width: 80,
-                height: 80,
-              }}
-            >
-              <Mic size={32} color={isRecording ? "#ef4444" : "#818cf8"} />
-            </Button>
-            <Text
-              fontSize={14}
-              fontWeight="600"
-              mt="$2"
-              color="rgba(255,255,255,0.7)"
-            >
-              {isRecording ? "Mic on" : "Mic muted"}
-            </Text>
+              onEnd={endInterview}
+              speakerOn={speakerOn}
+              onSpeakerToggle={() => setSpeakerOn((s) => !s)}
+            />
           </YStack>
         </YStack>
       </SafeAreaView>
