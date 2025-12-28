@@ -6,7 +6,7 @@ import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
 import { Play } from "@tamagui/lucide-icons";
 import { authFetch } from "lib/auth";
-import { useInterviewers } from "lib/queries/useInterviewers";
+import { useInterviewers } from "lib/hooks/useInterviewers";
 import {
   InterviewerCarousel,
   InterviewerInfoSheet,

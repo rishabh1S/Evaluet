@@ -1,35 +1,29 @@
-import React, { useEffect, useRef } from "react";
-import { ScrollView } from "react-native";
-import { Text, YStack } from "tamagui";
+import React from "react";
+import { Text, YStack, ScrollView } from "tamagui";
 
 type Props = {
-  text: string;
+  sentence: string;
 };
 
-const VoiceTranscript: React.FC<Props> = ({ text }) => {
-  const scrollRef = useRef<ScrollView>(null);
-
-  // Auto-scroll to bottom when new text arrives
-  useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [text]);
+const VoiceTranscript: React.FC<Props> = ({ sentence }) => {
 
   return (
     <YStack flex={1}>
       <ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingBottom: 8,
+          paddingVertical: 4,
         }}
+        showsVerticalScrollIndicator={false}
       >
         <Text
-          color="#e5e7eb"
-          fontSize={16}
-          lineHeight={22}
+          color="$accent5"
+          fontSize="$5"
+          lineHeight="$1"
           fontWeight="500"
+          textAlign="justify"
         >
-          {text || " "}
+          {sentence || " "}
         </Text>
       </ScrollView>
     </YStack>

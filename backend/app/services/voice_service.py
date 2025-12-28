@@ -28,7 +28,7 @@ class DeepgramService:
         self._silence_interval: float = 0.7  # seconds between silence frames
 
         # TTS timeout
-        self.tts_timeout: float = 10.0
+        self.tts_timeout: float = 12.0
 
     # =========================
     #   FLUX STT START/STOP
