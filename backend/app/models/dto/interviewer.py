@@ -6,6 +6,8 @@ class InterviewerPublicDTO(BaseModel):
     name: str
     description: Optional[str]
     profile_image_url: Optional[str]
+    idle_video_url: Optional[str]
+    talking_video_url: Optional[str]
     focus_areas: Optional[str]
 
     class Config:

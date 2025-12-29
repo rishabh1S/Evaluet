@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime
+from sqlalchemy import JSON, Column, String, Text, Boolean, DateTime
 from sqlalchemy.sql import func
 from app.db import Base
 
@@ -15,6 +15,8 @@ class InterviewerCharacter(Base):
     focus_areas = Column(Text)
 
     profile_image_url = Column(String)
+    idle_video_url = Column(String)
+    talking_video_url = Column(String)
 
     is_active = Column(Boolean, default=True)
 

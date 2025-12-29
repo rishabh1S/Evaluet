@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../../lib/env";
-import { Audio, Video, ResizeMode } from "expo-av";
+import { Audio } from "expo-av";
 import {
   AudioRecorderProvider,
   useSharedAudioRecorder,
@@ -13,6 +13,10 @@ import {
 import { useInterviewerStore } from "lib/store/interviewerStore";
 import { BottomControls, TopBar, VoiceTranscript } from "components/interview";
 import { mergeUint8Arrays, pcmToWav } from "lib/utils/audioUtils";
+import {
+  InterviewerVideoStage,
+  InterviewerVideoStageRef,
+} from "components/interview/InterviewerVideoStage";
 
 /* ---------------- Screen Wrapper ---------------- */
 
@@ -36,13 +40,13 @@ function InterviewScreen() {
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const micStartedRef = useRef(false);
-  const videoRef = useRef<Video | null>(null);
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
   const playLockRef = useRef<Promise<void> | null>(null);
   const assistantSpeakingRef = useRef(false);
   const clearInterviewer = useInterviewerStore((s) => s.clear);
-  const interviewerIdleVideo = require("../../../assets/videos/idle_1.mp4");
+  const interviewer = useInterviewerStore((s) => s.interviewer);
+  const videoStageRef = useRef<InterviewerVideoStageRef>(null);
 
   useKeepAwake();
 
@@ -50,19 +54,12 @@ function InterviewScreen() {
 
   useEffect(() => {
     if (!isRecording || interviewEndedRef.current) return;
-
     const t = setInterval(() => {
       setSeconds((s) => s + 1);
     }, 1000);
 
     return () => clearInterval(t);
   }, [isRecording]);
-
-  useEffect(() => {
-    return () => {
-      videoRef.current?.stopAsync().catch(() => {});
-    };
-  }, []);
 
   const timeLabel = `${Math.floor(seconds / 60)
     .toString()
@@ -197,6 +194,7 @@ function InterviewScreen() {
       }
 
       assistantSpeakingRef.current = true;
+      videoStageRef.current?.startTalking();
       await stopRecordingSafe();
 
       const wavData = pcmToWav(pcmData);
@@ -208,6 +206,7 @@ function InterviewScreen() {
         if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
           assistantSpeakingRef.current = false;
+          videoStageRef.current?.stopTalking();
 
           if (!interviewEndedRef.current) {
             setTimeout(() => startRecordingSafe().catch(() => {}), 120);
@@ -235,7 +234,7 @@ function InterviewScreen() {
       JSON.stringify({ type: "control", action: "END_INTERVIEW" })
     );
     ws.current?.close();
-  }
+  } 
 
   return (
     <LinearGradient
@@ -267,19 +266,10 @@ function InterviewScreen() {
               shadowRadius={28}
               elevation={12}
             >
-              <Video
-                ref={videoRef}
-                source={interviewerIdleVideo}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay
-                isLooping
-                isMuted
-                progressUpdateIntervalMillis={500}
-                useNativeControls={false}
-                rate={1}
-                volume={20}
-                onError={(e) => console.warn("Video error:", e)}
+              <InterviewerVideoStage
+                ref={videoStageRef}
+                idleVideoUrl={interviewer?.idle_video_url!}
+                talkingVideoUrl={interviewer?.talking_video_url!}
               />
             </YStack>
           </YStack>

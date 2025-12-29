@@ -20,6 +20,8 @@ async def get_all_interviewers(db: Session = Depends(get_db)):
             InterviewerCharacter.name,
             InterviewerCharacter.description,
             InterviewerCharacter.profile_image_url,
+            InterviewerCharacter.idle_video_url,
+            InterviewerCharacter.talking_video_url,
             InterviewerCharacter.focus_areas,
         ).filter(InterviewerCharacter.is_active == True)
         .all()
@@ -31,6 +33,8 @@ async def get_all_interviewers(db: Session = Depends(get_db)):
             name=row.name,
             description=row.description,
             profile_image_url=row.profile_image_url,
+            idle_video_url=row.idle_video_url,
+            talking_video_url=row.talking_video_url,
             focus_areas=row.focus_areas,
         )
         for row in rows
@@ -105,5 +109,5 @@ async def init_interview(
     return {
         "session_id": session_id,
         "message": "Interview initialized successfully",
-        "ws_url": f"/ws/interview/{session_id}" 
+        "ws_url": f"/ws/interview/{session_id}"
     }

@@ -12,15 +12,7 @@ import {
   InterviewerInfoSheet,
   InterviewForm,
 } from "components/landing";
-import { useInterviewerStore } from "lib/store/interviewerStore";
-
-type Interviewer = {
-  id: string;
-  name: string;
-  description?: string;
-  profile_image_url?: string;
-  focus_areas?: string;
-};
+import { Interviewer, useInterviewerStore } from "lib/store/interviewerStore";
 
 export default function IndexScreen() {
   const [jobRole, setJobRole] = useState("Software Engineer");

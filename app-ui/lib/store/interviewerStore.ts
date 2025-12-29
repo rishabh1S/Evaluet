@@ -5,6 +5,8 @@ export type Interviewer = {
   name: string;
   description?: string;
   profile_image_url?: string;
+  idle_video_url?: string;
+  talking_video_url?: string;
   focus_areas?: string;
 };
 
