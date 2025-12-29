@@ -162,6 +162,73 @@ npx expo prebuild
 npx expo run
 ```
 
+## 🧩 Interviewer Character Setup (Required)
+
+The application depends on **predefined interviewer personas** stored in the database.
+
+⚠️ **Important**:  
+The `interviewer_characters` table is **not transactional** and is **not auto-populated**.  
+At least **one interviewer record must exist** before starting an interview.
+
+If no interviewer characters are present:
+- The interviewer selection carousel will be empty
+- Interview sessions cannot be started
+
+### 📄 Database Table
+This table stores:
+- Interviewer identity and personality
+- LLM behavior and evaluation prompts
+- Voice model selection
+- Idle / talking video URLs
+
+
+---
+
+### 🛠️ Required Fields per Interviewer
+
+Each interviewer **must** include:
+
+- `id` (string, e.g. `sarah`, `marcus`)
+- `name`
+- `behavior_prompt`
+- `evaluation_prompt`
+- `voice_model`
+- `idle_video_url`
+- `talking_video_url`
+- `is_active = true`
+
+---
+
+### 🧪 Example: Insert Interviewer Character
+
+```sql
+INSERT INTO interviewer_characters (
+    id,
+    name,
+    description,
+    voice_model,
+    behavior_prompt,
+    evaluation_prompt,
+    focus_areas,
+    profile_image_url,
+    idle_video_url,
+    talking_video_url,
+    is_active
+) VALUES (
+    'sarah',
+    'Sarah',
+    'A supportive, collaborative senior interviewer who evaluates problem-solving and team fit.',
+    'aura-2-aurora-en',
+    $$You are a calm, encouraging interviewer. Ask clear, structured questions and probe using follow-ups.$$,
+    $$Evaluate clarity of thought, problem-solving depth, and communication.$$,
+    'Problem solving, communication, collaboration',
+    'https://<cdn>/interviewers/sarah/profile.png',
+    'https://<cdn>/interviewers/sarah/idle.mp4',
+    'https://<cdn>/interviewers/sarah/talking.mp4',
+    TRUE
+);
+```
+
 ## 🌱 Environment Variables
 
 To run this project, you will need to add the following environment variables to your .env file at base location
