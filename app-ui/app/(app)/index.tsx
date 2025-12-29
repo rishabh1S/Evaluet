@@ -6,21 +6,13 @@ import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
 import { Play } from "@tamagui/lucide-icons";
 import { authFetch } from "lib/auth";
-import { useInterviewers } from "lib/queries/useInterviewers";
+import { useInterviewers } from "lib/hooks/useInterviewers";
 import {
   InterviewerCarousel,
   InterviewerInfoSheet,
   InterviewForm,
 } from "components/landing";
-import { useInterviewerStore } from "lib/store/interviewerStore";
-
-type Interviewer = {
-  id: string;
-  name: string;
-  description?: string;
-  profile_image_url?: string;
-  focus_areas?: string;
-};
+import { Interviewer, useInterviewerStore } from "lib/store/interviewerStore";
 
 export default function IndexScreen() {
   const [jobRole, setJobRole] = useState("Software Engineer");
