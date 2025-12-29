@@ -1,9 +1,8 @@
 # Evaluet — Real-Time AI Interview Platform 🎙️🤖
 
-Evaluet is a **voice-first AI interview platform** that conducts realistic, structured, live interviews using speech-to-text, text-to-speech, and large language models.  
-It simulates a senior human interviewer — asking probing questions, adapting difficulty, and generating detailed post-interview evaluations.
+Evaluet is a real-time, voice-first AI interview platform that simulates realistic technical interviews using live speech recognition, streaming LLM responses, and synchronized interviewer video presence.
 
-Built with **FastAPI**, **WebSockets**, **PostgreSQL**, and **React Native (Expo)**, Evaluet focuses on **real-world interview realism**, not scripted chatbots.
+Unlike chat-based interview tools, Evaluet focuses on natural turn-taking, spoken responses, and interviewer realism, closely matching real interview conditions.
 
 ## ✨ Key Features
 
@@ -45,18 +44,26 @@ Built with **FastAPI**, **WebSockets**, **PostgreSQL**, and **React Native (Expo
 ---
 
 ## 🏗️ Architecture Overview
-┌────────────┐ WebSocket ┌───────────────────┐
-│ Mobile UI │ ───────────────▶ │ FastAPI Backend │
-│ (Expo RN) │ ◀─────────────── │ │
-└────────────┘ Audio + Text └───────────────────┘
-│ │
-│ │
-▼ ▼
-Speech Recording PostgreSQL
-(PCM 16kHz) (Users, Sessions, Reports)
+Mobile App (Expo / React Native)
 │
-▼
-Deepgram STT → LLM → TTS (Voice Response)
+├── Audio Recorder (PCM 16kHz)
+├── WebSocket (Live Audio + AI Audio)
+├── Interviewer Video Stage
+│
+Backend (FastAPI)
+│
+├── WebSocket Runtime
+│   ├── STT (Deepgram Flux)
+│   ├── LLM Streaming (Groq)
+│   ├── TTS (Deepgram Aura-2)
+│
+├── Interview State Manager
+├── Transcript & Session Persistence (Postgres)
+├── Report Generation Pipeline
+│   └── LLM → JSON → Email
+│
+Postgres (NeonDB)
+S3 (Interviewer Media)
 
 
 ## 🧩 Tech Stack
@@ -77,6 +84,8 @@ Deepgram STT → LLM → TTS (Voice Response)
 - **expo-av** — Audio playback
 - **expo-audio-studio** — PCM audio capture
 - **WebSockets** — Real-time communication
+- **Zustand** - Global State management
+- **Tanstack Query** - Data fetching
 
 ## 📂 Project Structure
 
@@ -116,37 +125,91 @@ app-ui/
 
 ## 🎙️ Interview Lifecycle
 
-1. **Interview Setup**
-- User uploads resume
-- Job role, level, description provided
-- Backend creates interview session
+### 1. Interview Setup
+- User selects:
+- Job role
+- Job level
+- Interviewer persona
+- Resume uploaded as PDF
+- Backend:
+- Extracts resume text
+- Builds a **context-aware system prompt**
+- Creates a persistent interview session in the database
+- Returns a session-bound WebSocket URL
 
-2. **Live Interview**
-- WebSocket connection established
-- Audio streamed as PCM (16kHz mono)
-- AI asks structured questions
-- Strict turn-taking enforced
+---
 
-3. **Finalization**
-- Transcript saved
-- Session marked completed
+### 2. Live Interview (Real-Time)
 
-4. **Async Report Generation**
-- LLM analyzes transcript
-- Structured feedback + score generated
-- Stored for later retrieval
+- Client opens a **WebSocket connection** using the session ID
+- Microphone audio streamed as **raw PCM (16kHz, mono)** in near-real time
+- Backend pipeline:
+- **Deepgram Flux** performs streaming STT with End-Of-Turn detection
+- User speech is queued only when AI is not speaking
+- AI responses are streamed token-by-token from **Groq LLM**
+- Sentences are converted to speech via **Deepgram Aura-2 TTS**
+- Strict turn-taking enforced:
+- No audio overlap
+- Silence keep-alive maintains STT connection
+- Interviewer video stage:
+- Idle and talking videos are **preloaded**
+- Seamless crossfade triggered only when AI speaks
+- Randomized seek offsets prevent repetitive visual loops
 
+---
+
+### 3. Deterministic Finalization
+- Interview ends when:
+- AI emits an explicit end signal
+- Or interview state expires
+- Backend actions:
+- Transcript finalized and stored
+- Session marked **COMPLETED** or **FAILED**
+- WebSocket gracefully closed
+- Client:
+- Stops recording
+- Clears interviewer state
+- Displays interview completion state
+
+---
+
+### 4. Async Report Generation
+- Runs **out-of-band** after interview completion
+- Backend:
+- Cleans and normalizes transcript
+- Generates a structured evaluation using LLM
+- Enforces strict JSON-only output
+- Parses output using fault-tolerant JSON handling
+- Results:
+- Hiring score (1–10)
+- Detailed markdown feedback
+- Report is:
+- Stored in the database
+- Sent to the candidate via email
+
+---
 
 ## 🧠 Interviewer Design Philosophy
 
-Evaluet’s interviewer is designed to:
-- Feel **human**, not robotic
-- Be **calm, confident, and engaging**
-- Avoid coaching or teaching
-- Test **fundamentals, reasoning, and judgment**
-- End interviews deterministically
+Evaluet’s interviewer is intentionally designed as an **evaluation system**, not a chatbot.
 
-This is **not** a chat assistant — it is an **evaluation system**.
+Core principles:
+- **Human-like presence** without pretending to be human
+- **Voice-first interaction**, not text-first
+- **No coaching, hints, or teaching**
+- Focus on:
+- Fundamentals
+- Problem-solving approach
+- Communication clarity
+- Decision-making under ambiguity
+- Deterministic behavior:
+- Clear interview start
+- Clear interview end
+- No endless conversations
+
+Interviewer personas (e.g., Sarah, Marcus, Victoria) differ in **tone and pressure**, but all follow the same rigorous evaluation standards.
+
+This ensures interviews feel realistic, fair, and consistently measurable.
 
 ## ⚠️ Notes & Constraints
 
@@ -159,7 +222,3 @@ This is **not** a chat assistant — it is an **evaluation system**.
 
 - OAuth (Google / LinkedIn)
 - Interview replay & analytics
-- Custom interviewer personalities
-- Multi-language support
-- Enterprise dashboards
-- VAD-based auto mic control
