@@ -118,6 +118,69 @@ app-ui/
 └── tamagui.config.ts
 ```
 
+---
+
+## 🔧 Installation & Local Setup
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/rishabh1S/evaluet.git
+cd evaluet
+```
+
+### 🧠 Backend Setup (FastAPI)
+Prerequisites
+- Python 3.10+
+- PostgreSQL (local or managed, e.g. NeonDB)
+- Virtual environment (recommended)
+
+
+```
+cd backend
+python -m venv venv
+source venv/bin/activate   # macOS / Linux
+# venv\Scripts\activate    # Windows
+
+pip install -r requirements.txt
+
+python run.py
+```
+
+### 📱 Frontend Setup (Expo – React Native)
+Prerequisites
+- Node.js 18+
+- Yarn or PNPM
+- Expo CLI
+- Android Studio / Xcode (optional, for simulators)
+
+```
+cd app-ui
+yarn install
+
+npx expo prebuild 
+npx expo run
+```
+
+## 🌱 Environment Variables
+
+To run this project, you will need to add the following environment variables to your .env file at base location
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+JWT_SECRET=your_secure_jwt_secret
+
+GROQ_API_KEY=your_groq_api_key
+DEEPGRAM_API_KEY=your_deepgram_api_key
+
+MAIL_USERNAME=your_email@example.com
+MAIL_PASSWORD=your_email_password_or_app_key
+
+EXPO_PUBLIC_API_BASE=http://localhost:8000
+EXPO_PUBLIC_WS_BASE=ws://localhost:8000
+```
+
 ## 🔐 Authentication Flow
 
 1. User registers or logs in via email/password
@@ -228,8 +291,9 @@ This ensures interviews feel realistic, fair, and consistently measurable.
 - Interview replay & analytics
 
 ## License
+This project is licensed under a custom **Non-Commercial Source-Available License**.  
+Commercial use is strictly prohibited.
 
-This repository is provided for reference and educational purposes only.
-Commercial usage, redistribution, or resale is **not permitted** without explicit permission.
+[Check here](https://github.com/rishabh1S/Evaluet/blob/main/LICENSE.md)
 
 ![Logo](https://evaluet-interviewers-media.s3.ap-south-1.amazonaws.com/evaluet.png)
