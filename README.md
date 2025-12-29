@@ -44,6 +44,7 @@ Unlike chat-based interview tools, Evaluet focuses on natural turn-taking, spoke
 ---
 
 ## 🏗️ Architecture Overview
+```
 Mobile App (Expo / React Native)
 │
 ├── Audio Recorder (PCM 16kHz)
@@ -64,7 +65,7 @@ Backend (FastAPI)
 │
 Postgres (NeonDB)
 S3 (Interviewer Media)
-
+```
 
 ## 🧩 Tech Stack
 
@@ -90,7 +91,7 @@ S3 (Interviewer Media)
 ## 📂 Project Structure
 
 ### Backend
-
+```
 backend/
 ├── app/
 │ ├── auth/ # Auth, JWT, security
@@ -101,9 +102,11 @@ backend/
 │ ├── repository/ # DB access layer
 │ ├── db.py # DB setup
 │ └── main.py # App entrypoint
+```
 
 ### Frontend
 
+```
 app-ui/
 ├── app/
 │ ├── (auth)/ # Login / Register
@@ -113,6 +116,7 @@ app-ui/
 ├── components/ # UI components
 ├── lib/ # Auth, env, helpers
 └── tamagui.config.ts
+```
 
 ## 🔐 Authentication Flow
 
@@ -222,3 +226,10 @@ This ensures interviews feel realistic, fair, and consistently measurable.
 
 - OAuth (Google / LinkedIn)
 - Interview replay & analytics
+
+## License
+
+This repository is provided for reference and educational purposes only.
+Commercial usage, redistribution, or resale is **not permitted** without explicit permission.
+
+![Logo](https://evaluet-interviewers-media.s3.ap-south-1.amazonaws.com/evaluet.png)
